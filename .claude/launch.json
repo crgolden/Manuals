@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Manuals (http)",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Manuals/Manuals.csproj", "--launch-profile", "http"],
+      "port": 5053
+    },
+    {
+      "name": "Manuals (https)",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Manuals/Manuals.csproj", "--launch-profile", "https"],
+      "port": 7099
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+@Manuals_HostAddress = http://localhost:5053
+@conversationId = conv-001
+
+### POST chat — first turn with system prompt
+POST {{Manuals_HostAddress}}/api/chat
+Content-Type: application/json
+
+{
+  "conversationId": "{{conversationId}}",
+  "message": "What is the capital of France?",
+  "systemPrompt": "You are a concise assistant. Answer in one sentence."
+}
+
+###
+
+### POST chat — second turn (history maintained, no systemPrompt needed)
+POST {{Manuals_HostAddress}}/api/chat
+Content-Type: application/json
+
+{
+  "conversationId": "{{conversationId}}",
+  "message": "What language do they speak there?"
+}
+
+###
+
+### DELETE — clear conversation history
+DELETE {{Manuals_HostAddress}}/api/chat/{{conversationId}}
+
+###
+
+### OpenAPI spec (development only)
+GET {{Manuals_HostAddress}}/openapi/v1.json
+
+###
