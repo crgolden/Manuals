@@ -1,10 +1,15 @@
 namespace Manuals.Services;
 
-using Models;
-
 public interface IChatService
 {
-    Task<ChatResponse?> CompleteChatAsync(ChatRequest request, CancellationToken cancellationToken = default);
+    Task<(string? Id, string? OutputText)> CompleteChatAsync(
+        string inputTextContent,
+        string? previousResponseId = null,
+        CancellationToken cancellationToken = default);
 
-    IAsyncEnumerable<string> StreamChatAsync(ChatRequest request, CancellationToken cancellationToken = default);
+    Task StreamChatAsync(
+        string inputTextContent,
+        HttpResponse httpResponse,
+        string? previousResponseId = null,
+        CancellationToken cancellationToken = default);
 }

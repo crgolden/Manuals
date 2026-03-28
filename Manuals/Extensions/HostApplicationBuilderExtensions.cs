@@ -1,5 +1,8 @@
-﻿namespace Manuals.Extensions;
+﻿#pragma warning disable OPENAI001
+namespace Manuals.Extensions;
 
+using System.ClientModel.Primitives;
+using System.Net;
 using Azure.Core;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Security.KeyVault.Secrets;
@@ -9,10 +12,13 @@ using Elastic.Serilog.Sinks;
 using Elastic.Transport;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Azure;
+using OpenAI;
+using OpenAI.Responses;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
+using StackExchange.Redis;
 
 public static class HostApplicationBuilderExtensions
 {
@@ -34,7 +40,16 @@ public static class HostApplicationBuilderExtensions
             });
             builder.Services
                 .AddOpenTelemetry()
-                .ConfigureResource(x => x.AddService(builder.Environment.ApplicationName))
+                .ConfigureResource(x =>
+                {
+                    x.AddService(
+                        serviceName: builder.Environment.ApplicationName,
+                        serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+                    x.AddAttributes(new Dictionary<string, object>
+                    {
+                        ["deployment.environment"] = builder.Environment.EnvironmentName.ToLowerInvariant()
+                    });
+                })
                 .UseAzureMonitor()
                 .WithMetrics(meterProviderBuilder =>
                 {
@@ -46,6 +61,7 @@ public static class HostApplicationBuilderExtensions
                 .WithTracing(tracerProviderBuilder =>
                 {
                     tracerProviderBuilder
+                        .SetSampler(new AlwaysOnSampler())
                         .AddSource(builder.Environment.ApplicationName)
                         .AddAspNetCoreInstrumentation(aspNetCoreTraceInstrumentationOptions =>
                         {
@@ -66,45 +82,75 @@ public static class HostApplicationBuilderExtensions
                         .ReadFrom.Configuration(builder.Configuration)
                         .ReadFrom.Services(sp)
                         .Enrich.FromLogContext();
-                    if (!builder.Environment.IsProduction())
+                    if (builder.Environment.IsProduction())
                     {
-                        return;
+                        loggerConfiguration
+                            .WriteTo.Elasticsearch(
+                                [elasticsearchNode],
+                                elasticsearchSinkOptions =>
+                                {
+                                    elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "dotnet", nameof(Manuals));
+                                    elasticsearchSinkOptions.BootstrapMethod = BootstrapMethod.Failure;
+                                },
+                                transportConfiguration =>
+                                {
+                                    var header = new BasicAuthentication(result[0].Value.Value, result[1].Value.Value);
+                                    transportConfiguration.Authentication(header);
+                                });
                     }
-
-                    loggerConfiguration
-                        .WriteTo.OpenTelemetry()
-                        .WriteTo.Elasticsearch(
-                            [elasticsearchNode],
-                            elasticsearchSinkOptions =>
-                            {
-                                elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "dotnet", nameof(Manuals));
-                                elasticsearchSinkOptions.BootstrapMethod = BootstrapMethod.Failure;
-                            },
-                            transportConfiguration =>
-                            {
-                                var header = new BasicAuthentication(result[0].Value.Value, result[1].Value.Value);
-                                transportConfiguration.Authentication(header);
-                            });
                 });
             return builder;
         }
 
-        public async Task<IHostApplicationBuilder> AddAuthAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
+        public IHostApplicationBuilder AddAuth()
         {
-            var authority = await secretClient.GetSecretAsync("OidcAuthority", cancellationToken: cancellationToken);
+            var authority = builder.Configuration.GetValue<Uri?>("OidcAuthority") ?? throw new InvalidOperationException("Invalid 'OidcAuthority'.");
             builder.Services
                 .AddAuthentication()
                 .AddJwtBearer(jwtBearerOptions =>
                 {
-                    jwtBearerOptions.Authority = authority.Value.Value;
+                    jwtBearerOptions.Authority = authority.ToString();
                     jwtBearerOptions.TokenValidationParameters.ValidateAudience = false;
+                    jwtBearerOptions.MapInboundClaims = false;
                 }).Services
                 .AddAuthorizationBuilder()
                 .AddPolicy("ApiScope", policy =>
                 {
                     policy.RequireAuthenticatedUser();
-                    policy.RequireClaim("krupamjo-api-1", "api1");
+                    policy.RequireClaim("scope", "manuals");
                 });
+            return builder;
+        }
+
+        public async Task<IHostApplicationBuilder> AddCachingAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
+        {
+            var redisPassword = await secretClient.GetSecretAsync("RedisPassword") ?? throw new InvalidOperationException("Invalid 'Redis Password'.");
+            var redisHost = builder.Configuration.GetValue<string?>("RedisHost") ?? throw new InvalidOperationException("Invalid 'RedisHost'.");
+            var redisPort = builder.Configuration.GetValue<int?>("RedisPort") ?? throw new InvalidOperationException("Invalid 'RedisPort'.");
+            var configurationOptions = new ConfigurationOptions
+            {
+                Ssl = true,
+                Password = redisPassword.Value.Value,
+                EndPoints = [new DnsEndPoint(redisHost, redisPort)]
+            };
+            var muxer = await ConnectionMultiplexer.ConnectAsync(configurationOptions);
+            builder.Services.AddSingleton<IDatabase>(sp =>
+            {
+                return muxer.GetDatabase();
+            });
+            return builder;
+        }
+
+        public IHostApplicationBuilder AddOpenAI(TokenCredential tokenCredential, string scope = "https://cognitiveservices.azure.com/.default")
+        {
+            var policy = new BearerTokenPolicy(tokenCredential, scope);
+            var endpoint = builder.Configuration.GetValue<Uri?>("OpenAIEndpoint") ?? throw new InvalidOperationException("Invalid 'OpenAIEndpoint'.");
+            var clientOptions = new OpenAIClientOptions
+            {
+                Endpoint = new Uri($"{endpoint}openai/v1/")
+            };
+            var responsesClient = new ResponsesClient(policy, clientOptions);
+            builder.Services.AddSingleton(responsesClient);
             return builder;
         }
 

@@ -9,12 +9,10 @@ using Services;
 public sealed class ChatController : ControllerBase
 {
     private readonly IChatService _chatService;
-    private readonly IConversationHistoryStore _conversationHistoryStore;
 
-    public ChatController(IChatService chatService, IConversationHistoryStore conversationHistoryStore)
+    public ChatController(IChatService chatService)
     {
         _chatService = chatService;
-        _conversationHistoryStore = conversationHistoryStore;
     }
 
     [HttpPost]
@@ -22,20 +20,13 @@ public sealed class ChatController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> PostAsync([FromBody] ChatRequest request, CancellationToken cancellationToken)
     {
-        if (IsNullOrWhiteSpace(request.ConversationId) || IsNullOrWhiteSpace(request.Message))
+        if (IsNullOrWhiteSpace(request.Input))
         {
-            return BadRequest("ConversationId and Message are required.");
+            ModelState.AddModelError(nameof(request.Input), "Input is required.");
+            return BadRequest(ModelState);
         }
 
-        var response = await _chatService.CompleteChatAsync(request, cancellationToken);
-        return Ok(response);
-    }
-
-    [HttpDelete("{conversationId}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public IActionResult Delete([FromRoute] string conversationId, CancellationToken cancellationToken)
-    {
-        _conversationHistoryStore.Clear(conversationId);
-        return NoContent();
+        var response = await _chatService.CompleteChatAsync(request.Input, request.PreviousResponseId, cancellationToken);
+        return Ok(new ChatResponse(response.OutputText, response.Id));
     }
 }

@@ -1,6 +1,3 @@
 namespace Manuals.Models;
 
-public sealed record ChatResponse(
-    string ConversationId,
-    string Message,
-    string FinishReason);
+public sealed record ChatResponse(string? Output, string? ResponseId);
