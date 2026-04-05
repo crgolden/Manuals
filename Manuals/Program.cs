@@ -1,7 +1,7 @@
 #pragma warning disable SA1200
-using System.Security.Claims;
 using Manuals.Extensions;
 using Manuals.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 #pragma warning restore SA1200
 
@@ -27,8 +27,15 @@ try
     builder.AddDataProtection(tokenCredential);
     builder.Services.AddHealthChecks();
     builder.AddAuth();
+    builder.Services.Configure<ForwardedHeadersOptions>(forwardedHeadersOptions =>
+    {
+        forwardedHeadersOptions.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        forwardedHeadersOptions.KnownIPNetworks.Clear();
+        forwardedHeadersOptions.KnownProxies.Clear();
+    });
 
     var app = builder.Build();
+    app.UseForwardedHeaders();
     app.UseSerilogRequestLogging();
     if (app.Environment.IsDevelopment())
     {
@@ -39,15 +46,11 @@ try
         app.UseHsts();
     }
 
+    app.MapOpenApi();
     app.UseHttpsRedirection().UseAuthorization();
     app.MapHealthChecks("Health").DisableHttpMetrics();
     app.MapStaticAssets();
     app.MapControllers();
-    app.MapGet("identity", (ClaimsPrincipal user) =>
-        {
-            return user.Claims.Select(c => new { c.Type, c.Value });
-        }).RequireAuthorization("ApiScope");
-
     await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException)

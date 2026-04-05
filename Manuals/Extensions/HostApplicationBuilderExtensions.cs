@@ -13,6 +13,7 @@ using Elastic.Transport;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Azure;
 using OpenAI;
+using OpenAI.Conversations;
 using OpenAI.Responses;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -114,7 +115,7 @@ public static class HostApplicationBuilderExtensions
                     jwtBearerOptions.MapInboundClaims = false;
                 }).Services
                 .AddAuthorizationBuilder()
-                .AddPolicy("ApiScope", policy =>
+                .AddPolicy(nameof(Manuals), policy =>
                 {
                     policy.RequireAuthenticatedUser();
                     policy.RequireClaim("scope", "manuals");
@@ -124,7 +125,7 @@ public static class HostApplicationBuilderExtensions
 
         public async Task<IHostApplicationBuilder> AddCachingAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
         {
-            var redisPassword = await secretClient.GetSecretAsync("RedisPassword") ?? throw new InvalidOperationException("Invalid 'Redis Password'.");
+            var redisPassword = await secretClient.GetSecretAsync("RedisPassword", cancellationToken: cancellationToken) ?? throw new InvalidOperationException("Invalid 'Redis Password'.");
             var redisHost = builder.Configuration.GetValue<string?>("RedisHost") ?? throw new InvalidOperationException("Invalid 'RedisHost'.");
             var redisPort = builder.Configuration.GetValue<int?>("RedisPort") ?? throw new InvalidOperationException("Invalid 'RedisPort'.");
             var configurationOptions = new ConfigurationOptions
@@ -134,10 +135,8 @@ public static class HostApplicationBuilderExtensions
                 EndPoints = [new DnsEndPoint(redisHost, redisPort)]
             };
             var muxer = await ConnectionMultiplexer.ConnectAsync(configurationOptions);
-            builder.Services.AddSingleton<IDatabase>(sp =>
-            {
-                return muxer.GetDatabase();
-            });
+            var database = muxer.GetDatabase();
+            builder.Services.AddSingleton(database);
             return builder;
         }
 
@@ -151,6 +150,8 @@ public static class HostApplicationBuilderExtensions
             };
             var responsesClient = new ResponsesClient(policy, clientOptions);
             builder.Services.AddSingleton(responsesClient);
+            var conversationClient = new ConversationClient(policy, clientOptions);
+            builder.Services.AddSingleton(conversationClient);
             return builder;
         }
 
