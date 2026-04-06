@@ -1,5 +1,9 @@
 # Manuals
 
+[![Build and deploy ASP.Net Core app to Azure Web App - crgolden-manuals](https://github.com/crgolden/Manuals/actions/workflows/main_crgolden-manuals.yml/badge.svg)](https://github.com/crgolden/Manuals/actions/workflows/main_crgolden-manuals.yml)
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=crgolden_Manuals&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=crgolden_Manuals)
+
 ASP.NET Core 10 API that proxies requests to Azure OpenAI, with both a REST endpoint for standard completions and a SignalR hub for real-time streaming.
 
 ## Architecture

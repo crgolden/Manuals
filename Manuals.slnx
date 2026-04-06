@@ -1,4 +1,12 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="CLAUDE.md" />
+    <File Path="coverage.settings.xml" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
   <Project Path="Manuals.Tests/Manuals.Tests.csproj" />
   <Project Path="Manuals/Manuals.csproj" />
 </Solution>
