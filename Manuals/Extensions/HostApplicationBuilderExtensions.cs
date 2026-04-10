@@ -42,8 +42,9 @@ public static class HostApplicationBuilderExtensions
                 .AddOpenTelemetry()
                 .ConfigureResource(x =>
                 {
+                    var serviceName = builder.Configuration["WEBSITE_SITE_NAME"] ?? builder.Environment.ApplicationName;
                     x.AddService(
-                        serviceName: builder.Environment.ApplicationName,
+                        serviceName: serviceName,
                         serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0");
                     x.AddAttributes(new Dictionary<string, object>
                     {

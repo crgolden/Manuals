@@ -124,7 +124,7 @@ jobs:
           echo "KeyVaultUri=${{ vars.KEYVAULT_URI }}" >> $env:GITHUB_ENV
           echo "DefaultAzureCredentialOptions__ExcludeAzureCliCredential=false" >> $env:GITHUB_ENV
           echo "RedisHost=${{ vars.REDIS_HOST }}" >> $env:GITHUB_ENV
-          echo "RedisPort=6380" >> $env:GITHUB_ENV
+          echo "RedisPort=${{ vars.REDIS_PORT }}" >> $env:GITHUB_ENV
           echo "OpenAIEndpoint=${{ vars.OPENAI_ENDPOINT }}" >> $env:GITHUB_ENV
           echo "OpenAIModel=${{ vars.OPENAI_MODEL }}" >> $env:GITHUB_ENV
           echo "OpenAIMaxOutputTokenCount=512" >> $env:GITHUB_ENV
