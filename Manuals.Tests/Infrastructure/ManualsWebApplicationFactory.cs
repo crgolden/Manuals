@@ -10,7 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// <see cref="WebApplicationFactory{TEntryPoint}"/> for nightly E2E tests.
+/// <see cref="WebApplicationFactory{TEntryPoint}"/> for integration tests.
 /// Uses the real Redis and Azure OpenAI connections established by
 /// <c>Manuals/Program.cs</c> at startup (requires <c>az login</c> / <c>azure/login</c>).
 /// Replaces the JWT Bearer auth with a test scheme so tests can call the API
@@ -18,13 +18,13 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 /// <remarks>
 /// Tests using this factory must clean up any Redis keys they create.
-/// Use the <c>nightly@test.invalid</c> email prefix to identify test data:
-/// Redis key <c>user:nightly@test.invalid:chats</c>.
+/// Use the <c>integration@test.invalid</c> email prefix to identify test data:
+/// Redis key <c>user:integration@test.invalid:chats</c>.
 /// </remarks>
 public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>
 {
-    internal const string TestEmail = "nightly@test.invalid";
-    internal const string TestScheme = "Nightly";
+    internal const string TestEmail = "integration@test.invalid";
+    internal const string TestScheme = "Integration";
 
     /// <inheritdoc/>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,7 +40,7 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
 
             // Replace JWT Bearer auth with a test scheme that always succeeds.
             services.AddAuthentication(TestScheme)
-                .AddScheme<AuthenticationSchemeOptions, NightlyAuthHandler>(TestScheme, _ => { });
+                .AddScheme<AuthenticationSchemeOptions, IntegrationAuthHandler>(TestScheme, _ => { });
 
             // Replace the Manuals authorization policy so it accepts the test scheme.
             services.AddAuthorizationBuilder()

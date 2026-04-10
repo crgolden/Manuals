@@ -10,24 +10,24 @@ using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 
 /// <summary>
-/// Nightly E2E tests against real Azure Redis and Azure OpenAI.
+/// Integration tests against real Azure Redis and Azure OpenAI.
 /// These tests use at most 3 real OpenAI completions per run.
 /// </summary>
 /// <remarks>
 /// Requires Azure login and the following environment variables:
 /// <c>RedisHost</c>, <c>RedisPort</c>, <c>OpenAIEndpoint</c>, <c>OpenAIModel</c>.
-/// Clean-up deletes all Redis keys prefixed <c>user:nightly@test.invalid:*</c>
+/// Clean-up deletes all Redis keys prefixed <c>user:integration@test.invalid:*</c>
 /// and <c>chat:{chatId:N}:*</c> for chats created during the run.
 /// </remarks>
-[Collection(NightlyCollection.Name)]
-[Trait("Category", "Nightly")]
-public sealed class NightlyChatsTests : IAsyncDisposable
+[Collection(IntegrationCollection.Name)]
+[Trait("Category", "Integration")]
+public sealed class IntegrationChatsTests : IAsyncDisposable
 {
     private readonly HttpClient _client;
     private readonly IDatabase _database;
     private readonly List<Guid> _createdChatIds = [];
 
-    public NightlyChatsTests(ManualsWebApplicationFactory factory)
+    public IntegrationChatsTests(ManualsWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
         _database = factory.Services.GetRequiredService<IDatabase>();
@@ -93,7 +93,7 @@ public sealed class NightlyChatsTests : IAsyncDisposable
 
         var first = await _client.PostAsJsonAsync(
             $"/api/chats/{chat.ChatId}/messages",
-            new ChatRequest("My name is AliceNightlyTestUser."),
+            new ChatRequest("My name is AliceIntegrationTestUser."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 

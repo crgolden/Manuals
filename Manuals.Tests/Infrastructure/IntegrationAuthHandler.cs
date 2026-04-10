@@ -7,12 +7,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// Test-only authentication handler for nightly E2E tests.
-/// Always authenticates as a nightly test user with the <c>manuals</c> scope.
+/// Test-only authentication handler for integration tests.
+/// Always authenticates as an integration test user with the <c>manuals</c> scope.
 /// </summary>
-internal sealed class NightlyAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+internal sealed class IntegrationAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    public NightlyAuthHandler(
+    public IntegrationAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder)
@@ -24,8 +24,8 @@ internal sealed class NightlyAuthHandler : AuthenticationHandler<AuthenticationS
     {
         var claims = new[]
         {
-            new Claim("sub", "nightly-user-id"),
-            new Claim("email", "nightly@test.invalid"),
+            new Claim("sub", "integration-user-id"),
+            new Claim("email", "integration@test.invalid"),
             new Claim("scope", "manuals"),
         };
         var identity = new ClaimsIdentity(claims, Scheme.Name);

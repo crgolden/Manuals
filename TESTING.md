@@ -1,13 +1,13 @@
 # Testing
 
-The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests** that run on every push with no external dependencies, and **nightly tests** that exercise real Azure Redis and Azure OpenAI on a scheduled basis.
+The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests** that run on every push with no external dependencies, and **integration tests** that exercise real Azure Redis and Azure OpenAI on every push to `main`.
 
 ## Test tiers
 
 | Tier | Trait | Project | Requires Azure? | Runs in CI |
 |------|-------|---------|-----------------|------------|
 | Unit | `Category=Unit` | `Manuals.Tests` | No | Every push/PR |
-| Nightly | `Category=Nightly` | `Manuals.Tests` | Yes — real Redis + OpenAI | Push to `main` |
+| Integration | `Category=Integration` | `Manuals.Tests` | Yes — real Redis + OpenAI | Push to `main` |
 
 ---
 
@@ -15,10 +15,10 @@ The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests**
 
 ### Prerequisites
 
-Unit tests require no Azure credentials. For nightly tests, authenticate first and set the following environment variables:
+Unit tests require no Azure credentials. For integration tests, authenticate first and set the following environment variables:
 
 ```bash
-az login   # Azure CLI — required for nightly tests (real Redis + OpenAI via Key Vault)
+az login   # Azure CLI — required for integration tests (real Redis + OpenAI via Key Vault)
 ```
 
 | Variable | Description |
@@ -29,7 +29,7 @@ az login   # Azure CLI — required for nightly tests (real Redis + OpenAI via K
 | `RedisPort` | Redis port — typically `6380` (SSL) |
 | `OpenAIEndpoint` | Azure OpenAI endpoint URL |
 | `OpenAIModel` | Deployed model name (e.g. `gpt-4o`) |
-| `OpenAIMaxOutputTokenCount` | Max tokens per completion (e.g. `512` for nightly, `4096` for production) |
+| `OpenAIMaxOutputTokenCount` | Max tokens per completion (e.g. `512` for integration tests, `4096` for production) |
 
 ### Unit tests
 
@@ -38,7 +38,7 @@ dotnet test --project Manuals.Tests --configuration Release \
   -- --filter-trait "Category=Unit"
 ```
 
-### Nightly tests (requires live Azure resources)
+### Integration tests (requires live Azure resources)
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -50,10 +50,10 @@ export OpenAIModel="gpt-4o"
 export OpenAIMaxOutputTokenCount=512
 
 dotnet test --project Manuals.Tests --no-build --configuration Release \
-  -- --filter-trait "Category=Nightly"
+  -- --filter-trait "Category=Integration"
 ```
 
-> **Data isolation:** nightly tests write to real Redis using the email `nightly@test.invalid` and clean up all created keys in `IAsyncDisposable.DisposeAsync` — `user:nightly@test.invalid:chats` and `chat:{chatId:N}:meta` / `chat:{chatId:N}:messages` for each created chat. Running multiple nightly test runs concurrently against the same Redis instance is not supported.
+> **Data isolation:** integration tests write to real Redis using the email `integration@test.invalid` and clean up all created keys in `IAsyncDisposable.DisposeAsync` — `user:integration@test.invalid:chats` and `chat:{chatId:N}:meta` / `chat:{chatId:N}:messages` for each created chat. Running multiple integration test runs concurrently against the same Redis instance is not supported.
 
 ### Run all tests
 
@@ -67,15 +67,15 @@ dotnet test Manuals.slnx --configuration Release
 
 ### `ManualsWebApplicationFactory`
 
-`WebApplicationFactory<Program>` used by nightly tests. Starts the full application with production configuration (real Redis, real Azure OpenAI). The only replacement is the logger factory (plain console, no Elasticsearch sink). Authentication is replaced with a test scheme that always authenticates as `nightly@test.invalid`.
+`WebApplicationFactory<Program>` used by integration tests. Starts the full application with production configuration (real Redis, real Azure OpenAI). The only replacement is the logger factory (plain console, no Elasticsearch sink). Authentication is replaced with a test scheme that always authenticates as `integration@test.invalid`.
 
-### `NightlyAuthHandler`
+### `IntegrationAuthHandler`
 
-An `AuthenticationHandler` registered as the default scheme in `ManualsWebApplicationFactory`. Always succeeds and returns a principal with `email = nightly@test.invalid`. This allows the nightly tests to call the API without a real JWT.
+An `AuthenticationHandler` registered as the default scheme in `ManualsWebApplicationFactory`. Always succeeds and returns a principal with `email = integration@test.invalid`. This allows the integration tests to call the API without a real JWT.
 
-### `NightlyCollection` / `NightlyChatsTests`
+### `IntegrationCollection` / `IntegrationChatsTests`
 
-A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFactory>`) that wraps all nightly tests. `NightlyChatsTests` implements `IAsyncDisposable` to delete test data from Redis after each test class.
+A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFactory>`) that wraps all integration tests. `IntegrationChatsTests` implements `IAsyncDisposable` to delete test data from Redis after each test class.
 
 ---
 
@@ -113,9 +113,9 @@ Tests `RedisChatsService` using a mocked `IDatabase` (StackExchange.Redis). Cove
 
 ---
 
-## Nightly test coverage
+## Integration test coverage
 
-### `E2E/NightlyChatsTests.cs` — real Azure Redis + Azure OpenAI
+### `E2E/IntegrationChatsTests.cs` — real Azure Redis + Azure OpenAI
 
 | Test | What it verifies |
 |------|-----------------|
@@ -133,16 +133,11 @@ These tests use at most 3 real OpenAI completions per run. `OpenAIMaxOutputToken
 
 1. Build solution (`dotnet build --no-incremental --configuration Release`)
 2. Unit tests with coverage (`dotnet-coverage collect … --filter-trait Category=Unit`)
-3. Upload TRX artifacts (`Manuals.Tests/bin/Release/net10.0/TestResults/`)
-4. Publish app + SonarCloud analysis
+3. Azure login (OIDC — same service principal as the deploy job)
+4. Set environment variables (`KeyVaultUri`, `RedisHost`, `RedisPort`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIMaxOutputTokenCount`)
+5. Integration tests with coverage (`dotnet-coverage collect … --filter-trait Category=Integration`)
+6. On failure: post an Adaptive Card to the Teams webhook (`TEAMS_WEBHOOK_URL` secret)
+7. Upload TRX artifacts (`Manuals.Tests/bin/Release/net10.0/TestResults/`)
+8. Publish app + SonarCloud analysis (coverage from both unit and integration tests)
 
-### Nightly job (push to `main`, or manual `workflow_dispatch`)
-
-1. Build `Manuals.Tests`
-2. Azure login (OIDC — same service principal as the deploy job)
-3. Set environment variables (`KeyVaultUri`, `RedisHost`, `RedisPort`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIMaxOutputTokenCount`)
-4. Run `--filter-trait Category=Nightly`
-5. On failure: post an Adaptive Card to the Teams webhook (`TEAMS_WEBHOOK_URL` secret)
-6. Upload TRX artifacts (`nightly-test-results`)
-
-The nightly job only runs on push to `main` or `workflow_dispatch` — it is skipped on pull_request events to avoid hitting real OpenAI on unmerged changes.
+Integration tests run on every push to `main` and on `workflow_dispatch` — they are skipped on pull_request events to avoid hitting real OpenAI on unmerged changes.
