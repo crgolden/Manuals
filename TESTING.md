@@ -6,8 +6,8 @@ The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests**
 
 | Tier | Trait | Project | Requires Azure? | Runs in CI |
 |------|-------|---------|-----------------|------------|
-| Unit | `Category=Unit` | `Manuals.Tests` | Yes (Key Vault at startup) | Every push/PR |
-| Nightly | `Category=Nightly` | `Manuals.Tests` | Yes — real Redis + OpenAI | Daily at 01:00 UTC |
+| Unit | `Category=Unit` | `Manuals.Tests` | No | Every push/PR |
+| Nightly | `Category=Nightly` | `Manuals.Tests` | Yes — real Redis + OpenAI | Push to `main` |
 
 ---
 
@@ -15,11 +15,11 @@ The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests**
 
 ### Prerequisites
 
-```bash
-az login   # Azure CLI — required for Key Vault at startup (unit) and real services (nightly)
-```
+Unit tests require no Azure credentials. For nightly tests, authenticate first and set the following environment variables:
 
-For nightly tests, the following environment variables must also be set:
+```bash
+az login   # Azure CLI — required for nightly tests (real Redis + OpenAI via Key Vault)
+```
 
 | Variable | Description |
 |----------|-------------|
@@ -136,7 +136,7 @@ These tests use at most 3 real OpenAI completions per run. `OpenAIMaxOutputToken
 3. Upload TRX artifacts (`Manuals.Tests/bin/Release/net10.0/TestResults/`)
 4. Publish app + SonarCloud analysis
 
-### Nightly job (daily at 01:00 UTC, or manual `workflow_dispatch`)
+### Nightly job (push to `main`, or manual `workflow_dispatch`)
 
 1. Build `Manuals.Tests`
 2. Azure login (OIDC — same service principal as the deploy job)
@@ -145,4 +145,4 @@ These tests use at most 3 real OpenAI completions per run. `OpenAIMaxOutputToken
 5. On failure: post an Adaptive Card to the Teams webhook (`TEAMS_WEBHOOK_URL` secret)
 6. Upload TRX artifacts (`nightly-test-results`)
 
-The nightly job only runs on `schedule` or `workflow_dispatch` events — it is skipped on push and pull_request to avoid hitting real OpenAI on every commit.
+The nightly job only runs on push to `main` or `workflow_dispatch` — it is skipped on pull_request events to avoid hitting real OpenAI on unmerged changes.

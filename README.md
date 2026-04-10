@@ -16,7 +16,9 @@ Client
   └── POST /api/chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
 ```
 
-Authentication uses `DefaultAzureCredential` — Managed Identity in Azure, `az login` locally. No secrets are stored in code or config.
+**Client authentication:** all endpoints require a JWT Bearer token with the `manuals` scope (issued by Identity, forwarded by the Experience BFF).
+
+**Azure service authentication:** `DefaultAzureCredential` — Managed Identity in Azure, `az login` locally — used to call Azure OpenAI. No secrets are stored in code or config.
 
 ## Prerequisites
 
