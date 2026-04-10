@@ -4,18 +4,16 @@
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=crgolden_Manuals&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=crgolden_Manuals)
 
-ASP.NET Core 10 API that proxies requests to Azure OpenAI, with both a REST endpoint for standard completions and a SignalR hub for real-time streaming.
+ASP.NET Core 10 API that proxies requests to Azure OpenAI. Provides REST endpoints for managing AI chat sessions with full message history stored in Redis.
 
 ## Architecture
 
 ```
 Client
-  ├── POST /api/chat          → ChatController → AzureOpenAIChatService → AzureOpenAIClient → Azure OpenAI
-  ├── DELETE /api/chat/{id}   → ChatController → IConversationHistoryStore
-  └── /hubs/chat (SignalR)    → ChatHub → AzureOpenAIChatService (streaming) → AzureOpenAIClient → Azure OpenAI
-
-AzureOpenAIChatService ←→ InMemoryConversationHistoryStore  (per-conversation message history)
-AzureOpenAIChatClientFactory  (constructs AzureOpenAIClient with DefaultAzureCredential)
+  ├── GET/POST/PATCH/DELETE /api/chats     → ChatsController → RedisChatsService → Redis
+  ├── GET /api/chats/{id}/messages         → ChatsController → RedisChatsService → Redis
+  ├── POST /api/chats/{id}/messages        → ChatsController → RedisChatsService → ResponsesClient → Azure OpenAI
+  └── POST /api/chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
 ```
 
 Authentication uses `DefaultAzureCredential` — Managed Identity in Azure, `az login` locally. No secrets are stored in code or config.
@@ -25,6 +23,7 @@ Authentication uses `DefaultAzureCredential` — Managed Identity in Azure, `az 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (`az login` for local dev)
 - Azure OpenAI resource with a deployed model (e.g., `gpt-4o`)
+- Redis instance (Azure Cache for Redis or local)
 
 ## Local Setup
 
@@ -32,108 +31,144 @@ Authentication uses `DefaultAzureCredential` — Managed Identity in Azure, `az 
 # 1. Authenticate with Azure
 az login
 
-# 2. Store the OpenAI endpoint in user secrets (never commit this)
-dotnet user-secrets set "AzureOpenAI:Endpoint" "https://<your-resource>.openai.azure.com" \
-  --project Manuals/Manuals.csproj
+# 2. Store secrets in user secrets
+dotnet user-secrets set "OpenAIEndpoint" "https://<your-resource>.openai.azure.com/" --project Manuals/Manuals.csproj
+dotnet user-secrets set "OpenAIModel" "gpt-4o" --project Manuals/Manuals.csproj
+dotnet user-secrets set "OpenAIMaxOutputTokenCount" "4096" --project Manuals/Manuals.csproj
+dotnet user-secrets set "RedisHost" "<your-redis-host>" --project Manuals/Manuals.csproj
+dotnet user-secrets set "RedisPort" "6380" --project Manuals/Manuals.csproj
 
-# 3. (Optional) Override the deployment name
-dotnet user-secrets set "AzureOpenAI:DeploymentName" "gpt-4o" \
-  --project Manuals/Manuals.csproj
-
-# 4. Run
+# 3. Run
 dotnet run --project Manuals/Manuals.csproj
 ```
 
-The app starts at `https://localhost:7099` / `http://localhost:5053`.
+The app starts at `https://localhost:7099`.
 
 - OpenAPI spec: `GET /openapi/v1.json` (development only)
-- SignalR test page: `http://localhost:5053/chat-test.html`
 
 ## REST Endpoint Reference
 
-### `POST /api/chat`
+All endpoints require a valid JWT Bearer token with the `manuals` scope.
+
+### `GET /api/chats`
+
+Returns all chats for the authenticated user, ordered newest first.
+
+**Response `200 OK`:**
+```json
+[
+  { "chatId": "string", "title": "string | null", "createdAt": 1700000000000 }
+]
+```
+
+---
+
+### `GET /api/chats/{chatId}`
+
+Returns a single chat by ID.
+
+**Response `200 OK`:** `{ "chatId": "string", "title": "string | null", "createdAt": number }`
+
+**Response `404 Not Found`** — when the chat does not exist or is not owned by the user.
+
+---
+
+### `GET /api/chats/{chatId}/messages`
+
+Returns the full message history for a chat.
+
+**Response `200 OK`:**
+```json
+[
+  { "role": "user", "text": "Hello" },
+  { "role": "assistant", "text": "Hi there!" }
+]
+```
+
+---
+
+### `POST /api/chats`
+
+Creates a new chat.
+
+**Response `201 Created`:** `{ "chatId": "string", "title": null, "createdAt": number }` with `Location` header.
+
+---
+
+### `PATCH /api/chats/{chatId}`
+
+Updates the chat title.
+
+**Request body** (`Content-Type: application/merge-patch+json`):
+```json
+{ "title": "My Chat Title" }
+```
+
+**Response `204 No Content`**
+
+**Response `400 Bad Request`** — when title is null or whitespace.
+
+**Response `404 Not Found`** — when the chat does not exist or is not owned by the user.
+
+---
+
+### `DELETE /api/chats/{chatId}`
+
+Deletes a chat and all its stored messages from Redis.
+
+**Response `204 No Content`**
+
+**Response `404 Not Found`** — when the chat does not exist or is not owned by the user.
+
+---
+
+### `POST /api/chats/{chatId}/messages`
 
 Send a message and receive a complete response.
 
 **Request body:**
 ```json
-{
-  "conversationId": "string",   // required — unique ID for this conversation thread
-  "message": "string",          // required — the user's message
-  "systemPrompt": "string"      // optional — applied only on the first turn of a conversation
-}
+{ "input": "string" }
 ```
 
 **Response `200 OK`:**
 ```json
-{
-  "conversationId": "string",
-  "message": "string",
-  "finishReason": "stop"
-}
+{ "output": "string", "chatId": "string" }
 ```
 
-**Response `400 Bad Request`** — when `conversationId` or `message` is empty.
+**Response `400 Bad Request`** — when input is empty.
+
+**Response `404 Not Found`** — when the chat does not exist or is not owned by the user.
+
+On first message, the chat title is auto-set to the first 60 characters of input.
 
 ---
 
-### `DELETE /api/chat/{conversationId}`
+### `POST /api/chats/{chatId}/messages/stream`
 
-Clears the stored message history for the given conversation. The next message to this `conversationId` will start a fresh context. Returns `204 No Content`.
+Send a message and receive a streaming response via Server-Sent Events.
 
-## SignalR Hub Reference
+**Request body:** `{ "input": "string" }`
 
-**Endpoint:** `/hubs/chat`
+**Response** (`text/event-stream`):
+```
+data: {"delta":{"content":"Hello"}}
 
-### JavaScript client example
+data: {"delta":{"content":" world"}}
 
-```javascript
-import * as signalR from "@microsoft/signalr";
+data: [DONE]
 
-const connection = new signalR.HubConnectionBuilder()
-  .withUrl("/hubs/chat")
-  .withAutomaticReconnect()
-  .build();
-
-connection.on("ReceiveSignal", (signal) => {
-  switch (signal.type) {
-    case "typing":
-      // AI is processing — show a spinner
-      break;
-    case "partial":
-      // Append signal.content to the displayed response
-      break;
-    case "completed":
-      // signal.content contains the full assembled response
-      break;
-  }
-});
-
-await connection.start();
-
-// Invoke a streaming completion
-await connection.invoke("SendMessage", {
-  conversationId: "conv-001",
-  message: "Explain quantum entanglement simply.",
-  systemPrompt: "You are a concise science communicator."  // optional
-});
 ```
 
-### Signal types
+## Known SDK Caveat
 
-| `type`      | Fields                              | Description                              |
-|-------------|-------------------------------------|------------------------------------------|
-| `typing`    | `conversationId`                    | AI has started processing                |
-| `partial`   | `conversationId`, `content`         | Incremental text chunk (buffered ≥20 chars) |
-| `completed` | `conversationId`, `content`         | Full assembled response; streaming done  |
+`RedisChatsService` uses `ResponseItem.CreateAssistantMessageItem(string text)` to reconstruct assistant turns when sending full conversation history to the Responses API. This experimental factory method (matching the pattern of `ResponseItem.CreateUserMessageItem`) **may not be present in OpenAI SDK v2.10.0**.
 
-## Running Tests
+If the project fails to compile with a missing-method error, see the workaround in [`CLAUDE.md` → SDK caveat](CLAUDE.md#sdk-caveat--responseitemcreateassistantmessageitem).
 
-```bash
-dotnet test Manuals.slnx
-```
+## Testing
 
-Integration tests use `WebApplicationFactory<Program>` with in-memory config and a mocked `IChatService` — no real Azure calls are made during CI.
+See [TESTING.md](TESTING.md) for the full testing guide — unit tests, nightly real-service tests, local prerequisites, and CI pipeline details.
 
 ## Deployment
 
@@ -142,7 +177,8 @@ Integration tests use `WebApplicationFactory<Program>` with in-memory config and
 | Resource | Notes |
 |---|---|
 | Azure OpenAI | Requires a deployed model (e.g. `gpt-4o`) |
-| Azure App Service (Linux, .NET 10) | Enable **Web sockets** under General Settings |
+| Azure Cache for Redis | SSL enabled, port 6380 |
+| Azure App Service (Linux, .NET 10) | Standard or higher plan |
 | Managed Identity (system-assigned) | Assign **Cognitive Services OpenAI User** role on the OpenAI resource |
 | App Registration (for GitHub Actions) | Add federated credential for `repo:<org>/Manuals:ref:refs/heads/main` |
 
@@ -150,8 +186,11 @@ Integration tests use `WebApplicationFactory<Program>` with in-memory config and
 
 | Key | Value |
 |---|---|
-| `AzureOpenAI__Endpoint` | `https://<your-resource>.openai.azure.com` |
-| `AzureOpenAI__DeploymentName` | `gpt-4o` |
+| `OpenAIEndpoint` | `https://<your-resource>.openai.azure.com/` |
+| `OpenAIModel` | `gpt-4o` |
+| `OpenAIMaxOutputTokenCount` | `4096` |
+| `RedisHost` | `<your-redis>.redis.cache.windows.net` |
+| `RedisPort` | `6380` |
 
 ### GitHub Actions Secrets
 
@@ -163,8 +202,3 @@ Integration tests use `WebApplicationFactory<Program>` with in-memory config and
 | `AZURE_WEBAPP_NAME` | App Service name |
 
 Push to `main` triggers build → test → publish → deploy. Pull requests run build and test only.
-
-### Scaling Considerations
-
-- `InMemoryConversationHistoryStore` is process-local. For multi-instance deployments, replace it with a Redis-backed implementation (the `IConversationHistoryStore` interface is designed for this swap).
-- Add `AddAzureSignalR()` with the Azure SignalR Service connection string to coordinate hub connections across multiple App Service instances.

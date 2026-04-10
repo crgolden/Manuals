@@ -10,6 +10,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'   # 01:00 UTC daily
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -117,7 +119,7 @@ jobs:
           -o ${{ github.workspace  }}\publish
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: .net-app
           path: ${{ github.workspace }}\publish
@@ -156,4 +158,90 @@ jobs:
           app-name: 'crgolden-manuals'
           slot-name: 'Production'
           package: .
+
+  nightly:
+    name: Nightly real-OpenAI tests
+    runs-on: windows-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Build Manuals.Tests
+        run: dotnet build Manuals.Tests --configuration Release
+
+      - name: Login to Azure
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8DE5AD040E9A48B5ABB987D909C873E4 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_C329C8261C3244ACB850928362690ADC }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B09849552EEF4A26B6234A3254D8CEC1 }}
+
+      - name: Set nightly environment
+        shell: powershell
+        run: |
+          echo "ASPNETCORE_ENVIRONMENT=CI" >> $env:GITHUB_ENV
+          echo "KeyVaultUri=${{ vars.KEYVAULT_URI }}" >> $env:GITHUB_ENV
+          echo "DefaultAzureCredentialOptions__ExcludeAzureCliCredential=false" >> $env:GITHUB_ENV
+          echo "RedisHost=${{ vars.REDIS_HOST }}" >> $env:GITHUB_ENV
+          echo "RedisPort=6380" >> $env:GITHUB_ENV
+          echo "OpenAIEndpoint=${{ vars.OPENAI_ENDPOINT }}" >> $env:GITHUB_ENV
+          echo "OpenAIModel=${{ vars.OPENAI_MODEL }}" >> $env:GITHUB_ENV
+          echo "OpenAIMaxOutputTokenCount=512" >> $env:GITHUB_ENV
+
+      - name: Run nightly tests
+        id: nightly
+        run: |
+          dotnet test --project Manuals.Tests --no-build --configuration Release `
+            -- --filter-trait Category=Nightly `
+            --report-xunit-trx --report-xunit-trx-filename nightly-tests.trx
+
+      - name: Notify Teams on failure
+        if: failure() && steps.nightly.outcome == 'failure'
+        shell: powershell
+        run: |
+          $body = @{
+            type = "message"
+            attachments = @(@{
+              contentType = "application/vnd.microsoft.card.adaptive"
+              content = @{
+                type = "AdaptiveCard"
+                version = "1.2"
+                body = @(@{
+                  type = "TextBlock"
+                  text = "Nightly E2E tests FAILED on Manuals (${{ github.repository }})"
+                  weight = "Bolder"
+                  color = "Attention"
+                })
+                actions = @(@{
+                  type = "Action.OpenUrl"
+                  title = "View Run"
+                  url = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                })
+              }
+            })
+          } | ConvertTo-Json -Depth 10
+          Invoke-RestMethod -Uri "${{ secrets.TEAMS_WEBHOOK_URL }}" -Method Post -Body $body -ContentType "application/json"
+
+      - name: Upload nightly results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nightly-test-results
+          path: Manuals.Tests/bin/Release/net10.0/TestResults/
           

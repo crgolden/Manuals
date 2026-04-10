@@ -2,6 +2,7 @@
 using Manuals.Extensions;
 using Manuals.Services;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Serilog;
 #pragma warning restore SA1200
 
@@ -19,8 +20,20 @@ try
     var secretClient = builder.Configuration.ToSecretClient(tokenCredential);
     await builder.AddCachingAsync(secretClient);
     builder.AddOpenAI(tokenCredential);
-    builder.Services.AddScoped<IChatService, OpenAIChatService>();
-    builder.Services.AddControllers();
+    builder.Services.AddScoped<IChatsService, RedisChatsService>();
+    builder.Services.AddControllers(options =>
+    {
+        // Keep "Async" in action names so nameof(GetChatAsync) matches the registered
+        // action name and CreatedAtAction can generate the Location header correctly.
+        // The framework default (SuppressAsyncSuffixInActionNames = true) would strip
+        // the suffix and cause a 500 from CreatedAtActionResult.OnFormatting.
+        options.SuppressAsyncSuffixInActionNames = false;
+
+        var jsonFormatter = options.InputFormatters
+            .OfType<SystemTextJsonInputFormatter>()
+            .FirstOrDefault();
+        jsonFormatter?.SupportedMediaTypes.Add("application/merge-patch+json");
+    });
     builder.Services.AddSignalR();
     builder.Services.AddOpenApi();
     await builder.AddObservabilityAsync(secretClient);
@@ -60,4 +73,15 @@ catch (Exception ex) when (ex is not HostAbortedException)
 finally
 {
     await Log.CloseAndFlushAsync();
+}
+
+public partial class Program
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Program"/> class.
+    /// Required for <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}"/>.
+    /// </summary>
+    protected Program()
+    {
+    }
 }

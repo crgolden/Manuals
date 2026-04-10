@@ -13,7 +13,6 @@ using Elastic.Transport;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Azure;
 using OpenAI;
-using OpenAI.Conversations;
 using OpenAI.Responses;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -150,8 +149,6 @@ public static class HostApplicationBuilderExtensions
             };
             var responsesClient = new ResponsesClient(policy, clientOptions);
             builder.Services.AddSingleton(responsesClient);
-            var conversationClient = new ConversationClient(policy, clientOptions);
-            builder.Services.AddSingleton(conversationClient);
             return builder;
         }
 
