@@ -41,7 +41,7 @@ public sealed class ChatsControllerTests
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<Chat>>(ok.Value);
+        var list = Assert.IsType<IReadOnlyList<Chat>>(ok.Value, exactMatch: false);
         Assert.Equal(2, list.Count);
         Assert.Equal("First Chat", list[0].Title);
     }
@@ -57,7 +57,7 @@ public sealed class ChatsControllerTests
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var list = Assert.IsAssignableFrom<IReadOnlyList<Chat>>(ok.Value);
+        var list = Assert.IsType<IReadOnlyList<Chat>>(ok.Value, exactMatch: false);
         Assert.Empty(list);
     }
 
@@ -108,7 +108,7 @@ public sealed class ChatsControllerTests
         var result = await _controller.GetChatMessagesAsync(TestChatId, TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var returned = Assert.IsAssignableFrom<IReadOnlyList<ChatHistoryMessage>>(ok.Value);
+        var returned = Assert.IsType<IReadOnlyList<ChatHistoryMessage>>(ok.Value, exactMatch: false);
         Assert.Equal(2, returned.Count);
         Assert.Equal("user", returned[0].Role);
         Assert.Equal("Hi there!", returned[1].Text);

@@ -10,6 +10,8 @@ using StackExchange.Redis;
 
 public sealed class RedisChatsService : IChatsService
 {
+    private const string TitleField = "title";
+
     private static readonly JsonSerializerOptions RedisJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ResponsesClient _responsesClient;
@@ -40,7 +42,7 @@ public sealed class RedisChatsService : IChatsService
             }
 
             var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
-            var title = GetMetaField(meta, "title");
+            var title = GetMetaField(meta, TitleField);
             var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
             chats.Add(new Chat(chatId, IsNullOrEmpty(title) ? null : title, createdAt));
         }
@@ -52,7 +54,7 @@ public sealed class RedisChatsService : IChatsService
     {
         await VerifyOwnershipAsync(email, chatId);
         var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
-        var title = GetMetaField(meta, "title");
+        var title = GetMetaField(meta, TitleField);
         var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
         return new Chat(chatId, IsNullOrEmpty(title) ? null : title, createdAt);
     }
@@ -67,7 +69,7 @@ public sealed class RedisChatsService : IChatsService
     {
         var chatId = Guid.NewGuid();
         var createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        HashEntry[] meta = [new HashEntry("title", string.Empty), new HashEntry("createdAt", createdAt)];
+        HashEntry[] meta = [new HashEntry(TitleField, string.Empty), new HashEntry("createdAt", createdAt)];
         await _database.HashSetAsync(ChatMetaKey(chatId), meta);
         await _database.SortedSetAddAsync(ChatsKey(email), chatId.ToString("N"), (double)createdAt);
         return new Chat(chatId, null, createdAt);
@@ -76,7 +78,7 @@ public sealed class RedisChatsService : IChatsService
     public async Task UpdateChatTitleAsync(string email, Guid chatId, string title, CancellationToken cancellationToken = default)
     {
         await VerifyOwnershipAsync(email, chatId);
-        await _database.HashSetAsync(ChatMetaKey(chatId), "title", title);
+        await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
     }
 
     public async Task DeleteChatAsync(string email, Guid chatId, CancellationToken cancellationToken = default)
@@ -235,11 +237,11 @@ public sealed class RedisChatsService : IChatsService
 
     private async Task SetAutoTitleIfNeededAsync(Guid chatId, string inputText)
     {
-        var existing = await _database.HashGetAsync(ChatMetaKey(chatId), "title");
+        var existing = await _database.HashGetAsync(ChatMetaKey(chatId), TitleField);
         if (!existing.HasValue || IsNullOrEmpty(existing.ToString()))
         {
             var title = inputText.Length <= 60 ? inputText : inputText[..60] + "…";
-            await _database.HashSetAsync(ChatMetaKey(chatId), "title", title);
+            await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
         }
     }
 }
