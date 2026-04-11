@@ -136,8 +136,7 @@ These tests use at most 3 real OpenAI completions per run. `OpenAIMaxOutputToken
 3. Azure login (OIDC — same service principal as the deploy job)
 4. Set environment variables (`KeyVaultUri`, `RedisHost`, `RedisPort`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIMaxOutputTokenCount`)
 5. Integration tests with coverage (`dotnet-coverage collect … --filter-trait Category=Integration`)
-6. On failure: post an Adaptive Card to the Teams webhook (`TEAMS_WEBHOOK_URL` secret)
-7. Upload TRX artifacts (`Manuals.Tests/bin/Release/net10.0/TestResults/`)
+6. Upload TRX artifacts (`Manuals.Tests/bin/Release/net10.0/TestResults/`)
 8. Publish app + SonarCloud analysis (coverage from both unit and integration tests)
 
 Integration tests run on every push to `main` and on `workflow_dispatch` — they are skipped on pull_request events to avoid hitting real OpenAI on unmerged changes.
