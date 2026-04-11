@@ -122,7 +122,12 @@ jobs:
         run: |
           echo "ASPNETCORE_ENVIRONMENT=CI" >> $env:GITHUB_ENV
           echo "KeyVaultUri=${{ vars.KEYVAULT_URI }}" >> $env:GITHUB_ENV
+          echo "BlobUri=${{ vars.BLOB_URI }}" >> $env:GITHUB_ENV
+          echo "DataProtectionKeyIdentifier=${{ vars.DATA_PROTECTION_KEY_IDENTIFIER }}" >> $env:GITHUB_ENV
           echo "DefaultAzureCredentialOptions__ExcludeAzureCliCredential=false" >> $env:GITHUB_ENV
+          echo "ElasticsearchNode=${{ vars.ELASTICSEARCH_NODE }}" >> $env:GITHUB_ENV
+          echo "APPLICATIONINSIGHTS_CONNECTION_STRING=${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING }}" >> $env:GITHUB_ENV
+          echo "OidcAuthority=${{ vars.OIDC_AUTHORITY }}" >> $env:GITHUB_ENV
           echo "RedisHost=${{ vars.REDIS_HOST }}" >> $env:GITHUB_ENV
           echo "RedisPort=${{ vars.REDIS_PORT }}" >> $env:GITHUB_ENV
           echo "OpenAIEndpoint=${{ vars.OPENAI_ENDPOINT }}" >> $env:GITHUB_ENV
