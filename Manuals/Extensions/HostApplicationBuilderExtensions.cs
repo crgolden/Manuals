@@ -63,7 +63,7 @@ public static class HostApplicationBuilderExtensions
                 {
                     tracerProviderBuilder
                         .SetSampler(new AlwaysOnSampler())
-                        .AddSource(builder.Environment.ApplicationName)
+                        .AddSource(nameof(Manuals))
                         .AddAspNetCoreInstrumentation(aspNetCoreTraceInstrumentationOptions =>
                         {
                             aspNetCoreTraceInstrumentationOptions.Filter = context =>
@@ -82,7 +82,10 @@ public static class HostApplicationBuilderExtensions
                     loggerConfiguration
                         .ReadFrom.Configuration(builder.Configuration)
                         .ReadFrom.Services(sp)
-                        .Enrich.FromLogContext();
+                        .Enrich.FromLogContext()
+                        .Enrich.WithMachineName()
+                        .Enrich.WithEnvironmentName()
+                        .Enrich.WithProperty("ApplicationName", "crgolden-manuals");
                     if (builder.Environment.IsProduction())
                     {
                         loggerConfiguration
@@ -100,6 +103,8 @@ public static class HostApplicationBuilderExtensions
                                 });
                     }
                 });
+            builder.Services.ConfigureOpenTelemetryTracerProvider((sp, tp) =>
+                tp.AddRedisInstrumentation(sp.GetRequiredService<IConnectionMultiplexer>()));
             return builder;
         }
 
@@ -136,6 +141,7 @@ public static class HostApplicationBuilderExtensions
             };
             var muxer = await ConnectionMultiplexer.ConnectAsync(configurationOptions);
             var database = muxer.GetDatabase();
+            builder.Services.AddSingleton<IConnectionMultiplexer>(muxer);
             builder.Services.AddSingleton(database);
             return builder;
         }

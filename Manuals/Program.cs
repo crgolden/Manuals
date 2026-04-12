@@ -1,4 +1,5 @@
 #pragma warning disable SA1200
+using System.Diagnostics;
 using Manuals.Extensions;
 using Manuals.Services;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -49,7 +50,20 @@ try
 
     var app = builder.Build();
     app.UseForwardedHeaders();
-    app.UseSerilogRequestLogging();
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.EnrichDiagnosticContext = (diagnosticContext, _) =>
+        {
+            var activity = Activity.Current;
+            if (activity is null)
+            {
+                return;
+            }
+
+            diagnosticContext.Set("TraceId", activity.TraceId.ToString());
+            diagnosticContext.Set("SpanId", activity.SpanId.ToString());
+        };
+    });
     if (app.Environment.IsDevelopment())
     {
         app.UseDeveloperExceptionPage();

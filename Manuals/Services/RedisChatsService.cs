@@ -1,6 +1,7 @@
 #pragma warning disable OPENAI001
 namespace Manuals.Services;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -114,6 +115,9 @@ public sealed class RedisChatsService : IChatsService
             MaxOutputTokenCount = _maxOutputTokenCount
         };
 
+        using var activity = Telemetry.ActivitySource.StartActivity("manuals.openai.complete_chat");
+        activity?.SetTag("ai.model", _model);
+
         var response = await _responsesClient.CreateResponseAsync(options, cancellationToken);
         var outputText = response?.Value?.GetOutputText() ?? throw new InvalidOperationException("OpenAI returned no output.");
 
@@ -181,6 +185,9 @@ public sealed class RedisChatsService : IChatsService
             MaxOutputTokenCount = _maxOutputTokenCount,
             StreamingEnabled = true
         };
+
+        using var activity = Telemetry.ActivitySource.StartActivity("manuals.openai.stream_chat");
+        activity?.SetTag("ai.model", _model);
 
         var accumulated = new StringBuilder();
         try
