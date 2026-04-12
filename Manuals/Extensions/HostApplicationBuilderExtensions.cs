@@ -71,7 +71,8 @@ public static class HostApplicationBuilderExtensions
                                 return !context.Request.Path.StartsWithSegments("/Health");
                             };
                         })
-                        .AddHttpClientInstrumentation();
+                        .AddHttpClientInstrumentation()
+                        .AddRedisInstrumentation();
                     if (builder.Environment.IsDevelopment())
                     {
                         tracerProviderBuilder.AddConsoleExporter();
@@ -103,8 +104,6 @@ public static class HostApplicationBuilderExtensions
                                 });
                     }
                 });
-            builder.Services.ConfigureOpenTelemetryTracerProvider((sp, tp) =>
-                tp.AddRedisInstrumentation(sp.GetRequiredService<IConnectionMultiplexer>()));
             return builder;
         }
 
