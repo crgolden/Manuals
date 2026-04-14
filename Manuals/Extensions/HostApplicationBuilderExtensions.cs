@@ -26,7 +26,8 @@ public static class HostApplicationBuilderExtensions
     {
         public async Task<IHostApplicationBuilder> AddObservabilityAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
         {
-            var elasticsearchNode = builder.Configuration.GetValue<Uri>("ElasticsearchNode") ?? throw new InvalidOperationException("Invalid 'ElasticsearchNode'.");
+            var applicationName = builder.Configuration["WEBSITE_SITE_NAME"];
+            var elasticsearchNode = builder.Configuration.GetValue<Uri?>("ElasticsearchNode") ?? throw new InvalidOperationException("Invalid 'ElasticsearchNode'.");
             var tasks = new[]
             {
                 secretClient.GetSecretAsync("ElasticsearchUsername", cancellationToken: cancellationToken),
@@ -38,20 +39,19 @@ public static class HostApplicationBuilderExtensions
                 openTelemetryLoggerOptions.IncludeFormattedMessage = true;
                 openTelemetryLoggerOptions.IncludeScopes = true;
             });
-            builder.Services
+            var otelBuilder = builder.Services
                 .AddOpenTelemetry()
-                .ConfigureResource(x =>
+                .ConfigureResource(resourceBuilder =>
                 {
-                    var serviceName = builder.Configuration["WEBSITE_SITE_NAME"] ?? builder.Environment.ApplicationName;
-                    x.AddService(
+                    var serviceName = applicationName ?? builder.Environment.ApplicationName;
+                    resourceBuilder.AddService(
                         serviceName: serviceName,
                         serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0");
-                    x.AddAttributes(new Dictionary<string, object>
+                    resourceBuilder.AddAttributes(new Dictionary<string, object>
                     {
                         ["deployment.environment"] = builder.Environment.EnvironmentName.ToLowerInvariant()
                     });
                 })
-                .UseAzureMonitor()
                 .WithMetrics(meterProviderBuilder =>
                 {
                     meterProviderBuilder
@@ -68,7 +68,7 @@ public static class HostApplicationBuilderExtensions
                         {
                             aspNetCoreTraceInstrumentationOptions.Filter = context =>
                             {
-                                return !context.Request.Path.StartsWithSegments("/Health");
+                                return !context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase);
                             };
                         })
                         .AddHttpClientInstrumentation()
@@ -77,33 +77,44 @@ public static class HostApplicationBuilderExtensions
                     {
                         tracerProviderBuilder.AddConsoleExporter();
                     }
-                }).Services
-                .AddSerilog((sp, loggerConfiguration) =>
+                });
+
+            if (builder.Environment.IsProduction())
+            {
+                otelBuilder.UseAzureMonitor();
+            }
+
+            builder.Services.AddSerilog((sp, loggerConfiguration) =>
+            {
+                loggerConfiguration
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .ReadFrom.Services(sp)
+                    .Enrich.FromLogContext()
+                    .Enrich.WithMachineName()
+                    .Enrich.WithEnvironmentName();
+                if (!IsNullOrWhiteSpace(applicationName))
                 {
                     loggerConfiguration
-                        .ReadFrom.Configuration(builder.Configuration)
-                        .ReadFrom.Services(sp)
-                        .Enrich.FromLogContext()
-                        .Enrich.WithMachineName()
-                        .Enrich.WithEnvironmentName()
-                        .Enrich.WithProperty("ApplicationName", "crgolden-manuals");
-                    if (builder.Environment.IsProduction())
-                    {
-                        loggerConfiguration
-                            .WriteTo.Elasticsearch(
-                                [elasticsearchNode],
-                                elasticsearchSinkOptions =>
-                                {
-                                    elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "dotnet", nameof(Manuals));
-                                    elasticsearchSinkOptions.BootstrapMethod = BootstrapMethod.Failure;
-                                },
-                                transportConfiguration =>
-                                {
-                                    var header = new BasicAuthentication(result[0].Value.Value, result[1].Value.Value);
-                                    transportConfiguration.Authentication(header);
-                                });
-                    }
-                });
+                        .Enrich.WithProperty(nameof(IHostEnvironment.ApplicationName), applicationName);
+                }
+
+                if (builder.Environment.IsProduction())
+                {
+                    loggerConfiguration
+                        .WriteTo.Elasticsearch(
+                            [elasticsearchNode],
+                            elasticsearchSinkOptions =>
+                            {
+                                elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "dotnet", nameof(Manuals));
+                                elasticsearchSinkOptions.BootstrapMethod = BootstrapMethod.Failure;
+                            },
+                            transportConfiguration =>
+                            {
+                                var header = new BasicAuthentication(result[0].Value.Value, result[1].Value.Value);
+                                transportConfiguration.Authentication(header);
+                            });
+                }
+            });
             return builder;
         }
 
@@ -160,8 +171,8 @@ public static class HostApplicationBuilderExtensions
 
         public IHostApplicationBuilder AddDataProtection(TokenCredential tokenCredential)
         {
-            var blobUrl = builder.Configuration.GetValue<Uri>("BlobUri") ?? throw new InvalidOperationException("Invalid 'BlobUri'.");
-            var dataProtectionKeyIdentifier = builder.Configuration.GetValue<Uri>("DataProtectionKeyIdentifier") ?? throw new InvalidOperationException("Invalid 'DataProtectionKeyIdentifier'.");
+            var blobUrl = builder.Configuration.GetValue<Uri?>("BlobUri") ?? throw new InvalidOperationException("Invalid 'BlobUri'.");
+            var dataProtectionKeyIdentifier = builder.Configuration.GetValue<Uri?>("DataProtectionKeyIdentifier") ?? throw new InvalidOperationException("Invalid 'DataProtectionKeyIdentifier'.");
             builder.Services
                 .AddDataProtection()
                 .SetApplicationName(builder.Environment.ApplicationName)

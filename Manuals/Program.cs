@@ -1,5 +1,6 @@
 #pragma warning disable SA1200
 using System.Diagnostics;
+using System.Security.Claims;
 using Manuals.Extensions;
 using Manuals.Services;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -24,12 +25,7 @@ try
     builder.Services.AddScoped<IChatsService, RedisChatsService>();
     builder.Services.AddControllers(options =>
     {
-        // Keep "Async" in action names so nameof(GetChatAsync) matches the registered
-        // action name and CreatedAtAction can generate the Location header correctly.
-        // The framework default (SuppressAsyncSuffixInActionNames = true) would strip
-        // the suffix and cause a 500 from CreatedAtActionResult.OnFormatting.
         options.SuppressAsyncSuffixInActionNames = false;
-
         var jsonFormatter = options.InputFormatters
             .OfType<SystemTextJsonInputFormatter>()
             .FirstOrDefault();
@@ -60,8 +56,8 @@ try
                 return;
             }
 
-            diagnosticContext.Set("TraceId", activity.TraceId.ToString());
-            diagnosticContext.Set("SpanId", activity.SpanId.ToString());
+            diagnosticContext.Set(nameof(Activity.TraceId), activity.TraceId.ToString());
+            diagnosticContext.Set(nameof(Activity.SpanId), activity.SpanId.ToString());
         };
     });
     if (app.Environment.IsDevelopment())
@@ -73,9 +69,22 @@ try
         app.UseHsts();
     }
 
-    app.MapOpenApi();
     app.UseHttpsRedirection().UseAuthorization();
-    app.MapHealthChecks("Health").DisableHttpMetrics();
+    app.Use((ctx, next) =>
+    {
+        if (ctx.User.Identity?.IsAuthenticated != true)
+        {
+            return next(ctx);
+        }
+
+        using (Serilog.Context.LogContext.PushProperty("UserId", ctx.User.FindFirstValue("sub")))
+        using (Serilog.Context.LogContext.PushProperty("UserEmail", ctx.User.FindFirstValue("email")))
+        {
+            return next(ctx);
+        }
+    });
+    app.MapOpenApi();
+    app.MapHealthChecks("/health").DisableHttpMetrics();
     app.MapStaticAssets();
     app.MapControllers();
     await app.RunAsync();
