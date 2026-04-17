@@ -10,7 +10,7 @@ public static class ConfigurationExtensions
     {
         public async Task<TokenCredential> ToTokenCredentialAsync(string scope = "https://vault.azure.net/.default", CancellationToken cancellationToken = default)
         {
-            var options = configuration.Get<DefaultAzureCredentialOptions>() ?? throw new InvalidOperationException($"Invalid '{nameof(DefaultAzureCredentialOptions)}' configuration.");
+            var options = configuration.GetSection(nameof(DefaultAzureCredentialOptions)).Get<DefaultAzureCredentialOptions>() ?? throw new InvalidOperationException($"Invalid '{nameof(DefaultAzureCredentialOptions)}' configuration.");
             var credential = new DefaultAzureCredential(options);
             var context = new TokenRequestContext([scope]);
             var token = await credential.GetTokenAsync(context, cancellationToken);
