@@ -11,7 +11,7 @@ using static System.Net.Mime.MediaTypeNames.Text;
 using static StatusCodes;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 [Authorize(nameof(Manuals))]
 public sealed class ChatsController : ControllerBase
 {

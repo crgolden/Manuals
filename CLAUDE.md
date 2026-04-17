@@ -13,23 +13,23 @@ This layering keeps the codebase clean, reusable, and testable, and eliminates a
 
 All endpoints require a valid JWT Bearer token with the `manuals` scope (enforced by the `nameof(Manuals)` authorization policy).
 
-### Chat CRUD (`/api/chats`)
+### Chat CRUD (`/chats`)
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/api/chats` | Returns all chats for the authenticated user (`Chat[]`), ordered newest first. |
-| `GET` | `/api/chats/{chatId}` | Returns `Chat { chatId, title, createdAt }` for one chat. 404 if not owned by the user. |
-| `GET` | `/api/chats/{chatId}/messages` | Returns `ChatHistoryMessage[]` (full message history). 404 if not owned by the user. |
-| `POST` | `/api/chats` | Creates a new chat. Returns `201 Created` with the `Chat` object and a `Location` header pointing to `GET /api/chats/{chatId}`. |
-| `PATCH` | `/api/chats/{chatId}` | Updates the chat title. Body: `{ "title": "..." }` with `Content-Type: application/merge-patch+json`. Returns 204 No Content. |
-| `DELETE` | `/api/chats/{chatId}` | Deletes a chat and all its stored messages. Returns 204 No Content. 404 if not owned by the user. |
+| `GET` | `/chats` | Returns all chats for the authenticated user (`Chat[]`), ordered newest first. |
+| `GET` | `/chats/{chatId}` | Returns `Chat { chatId, title, createdAt }` for one chat. 404 if not owned by the user. |
+| `GET` | `/chats/{chatId}/messages` | Returns `ChatHistoryMessage[]` (full message history). 404 if not owned by the user. |
+| `POST` | `/chats` | Creates a new chat. Returns `201 Created` with the `Chat` object and a `Location` header pointing to `GET /chats/{chatId}`. |
+| `PATCH` | `/chats/{chatId}` | Updates the chat title. Body: `{ "title": "..." }` with `Content-Type: application/merge-patch+json`. Returns 204 No Content. |
+| `DELETE` | `/chats/{chatId}` | Deletes a chat and all its stored messages. Returns 204 No Content. 404 if not owned by the user. |
 
 ### Messaging
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `POST` | `/api/chats/{chatId}/messages` | Single-turn completion. Body: `{ input }`. Returns `{ output, chatId }`. |
-| `POST` | `/api/chats/{chatId}/messages/stream` | Streaming response via Server-Sent Events. Same body. Returns `text/event-stream` with `data: {"delta":{"content":"..."}}` lines, terminated by `data: [DONE]`. |
+| `POST` | `/chats/{chatId}/messages` | Single-turn completion. Body: `{ input }`. Returns `{ output, chatId }`. |
+| `POST` | `/chats/{chatId}/messages/stream` | Streaming response via Server-Sent Events. Same body. Returns `text/event-stream` with `data: {"delta":{"content":"..."}}` lines, terminated by `data: [DONE]`. |
 
 ### Chat lifecycle
 

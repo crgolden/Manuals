@@ -42,7 +42,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
 
         // Act: send a message expected to yield a short, unambiguous answer.
         var response = await _client.PostAsJsonAsync(
-            $"/api/chats/{chat.ChatId}/messages",
+            $"/chats/{chat.ChatId}/messages",
             new ChatRequest("What is 2+2? Reply with only the number."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -63,7 +63,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         // Act: stream a message.
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/api/chats/{chat.ChatId}/messages/stream")
+            $"/chats/{chat.ChatId}/messages/stream")
         {
             Content = new StringContent(
                 JsonSerializer.Serialize(new ChatRequest("Say exactly: hello")),
@@ -92,14 +92,14 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         _createdChatIds.Add(chat.ChatId);
 
         var first = await _client.PostAsJsonAsync(
-            $"/api/chats/{chat.ChatId}/messages",
+            $"/chats/{chat.ChatId}/messages",
             new ChatRequest("My name is AliceIntegrationTestUser."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
         // Act: ask a follow-up that only makes sense if history is sent.
         var second = await _client.PostAsJsonAsync(
-            $"/api/chats/{chat.ChatId}/messages",
+            $"/chats/{chat.ChatId}/messages",
             new ChatRequest("What is my name? Reply with only the name."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
@@ -131,7 +131,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
     private async Task<Chat> CreateChatAsync()
     {
         var response = await _client.PostAsync(
-            "/api/chats",
+            "/chats",
             content: null,
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

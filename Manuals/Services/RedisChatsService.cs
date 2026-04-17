@@ -19,6 +19,7 @@ public sealed class RedisChatsService : IChatsService
     private readonly IDatabase _database;
     private readonly string _model;
     private readonly int _maxOutputTokenCount;
+    private readonly string? _instructions;
 
     public RedisChatsService(
         ResponsesClient responsesClient,
@@ -29,6 +30,7 @@ public sealed class RedisChatsService : IChatsService
         _database = database;
         _model = configuration.GetValue<string?>("OpenAIModel") ?? throw new InvalidOperationException("Invalid 'OpenAIModel'.");
         _maxOutputTokenCount = configuration.GetValue<int?>("OpenAIMaxOutputTokenCount") ?? throw new InvalidOperationException("Invalid 'OpenAIMaxOutputTokenCount'.");
+        _instructions = configuration.GetValue<string?>("OpenAIInstructions");
     }
 
     public async Task<IReadOnlyList<Chat>> GetChatsAsync(string email, CancellationToken cancellationToken = default)
@@ -112,7 +114,9 @@ public sealed class RedisChatsService : IChatsService
         var inputItems = BuildInputItems(history, inputText);
         var options = new CreateResponseOptions(_model, inputItems)
         {
-            MaxOutputTokenCount = _maxOutputTokenCount
+            MaxOutputTokenCount = _maxOutputTokenCount,
+            Instructions = _instructions,
+            Tools = { ResponseTool.CreateWebSearchTool() }
         };
 
         using var activity = Telemetry.ActivitySource.StartActivity("manuals.openai.complete_chat");
@@ -183,7 +187,9 @@ public sealed class RedisChatsService : IChatsService
         var options = new CreateResponseOptions(_model, inputItems)
         {
             MaxOutputTokenCount = _maxOutputTokenCount,
-            StreamingEnabled = true
+            Instructions = _instructions,
+            StreamingEnabled = true,
+            Tools = { ResponseTool.CreateWebSearchTool() }
         };
 
         using var activity = Telemetry.ActivitySource.StartActivity("manuals.openai.stream_chat");
