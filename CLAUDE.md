@@ -41,7 +41,7 @@ Callers should:
 5. `PATCH /api/chats/{chatId}` to update the chat title.
 6. `DELETE /api/chats/{chatId}` when explicitly discarding a chat.
 
-Chat IDs are scoped per user by the `email` JWT claim. Redis enforces user isolation at the service layer.
+Chat IDs are scoped per user by the `sub` JWT claim (stable OIDC subject identifier — a GUID string). Redis enforces user isolation at the service layer.
 
 ### Auto-title behavior
 
@@ -59,7 +59,7 @@ All chat data is stored in Redis. User isolation is enforced by the service laye
 
 | Key | Type | Contents |
 |-----|------|----------|
-| `user:{email}:chats` | Sorted Set | chatId members, score = Unix timestamp ms (newest = highest score) |
+| `user:{sub}:chats` | Sorted Set | chatId members, score = Unix timestamp ms (newest = highest score). `sub` is the JWT subject claim (GUID string). |
 | `chat:{chatId}:meta` | Hash | fields: `title` (string, may be empty), `createdAt` (ms timestamp) |
 | `chat:{chatId}:messages` | List | JSON strings appended chronologically: `{"role":"user","text":"..."}` |
 
@@ -70,6 +70,22 @@ Messages are stored chronologically (RPUSH). The chat list sorted set retrieves 
 - `ResponsesClient` (from `OpenAI.Responses`, marked OPENAI001 experimental) handles all completions and streaming.
 - Full conversation history is loaded from Redis and passed as input items on every request — the app does not rely on OpenAI's server-side conversation storage.
 - `ConversationClient` has been removed; there is no dependency on OpenAI's conversation management API.
+
+## Integration Test Infrastructure
+
+> For cross-cutting concerns — `ASPNETCORE_ENVIRONMENT=Development` requirement, Azure CLI token warmup, `CredentialProcessTimeout` user secret, and `AddUserSecrets` explicit call pattern — see [../CLAUDE.md](../CLAUDE.md).
+
+### Test user identity
+
+`ManualsWebApplicationFactory.TestUserId = "integration-user-id"` is the `sub` claim issued by `IntegrationAuthHandler`. All Redis keys created during integration test runs use this value:
+
+| Redis key | Value |
+|---|---|
+| `user:{TestUserId}:chats` | `user:integration-user-id:chats` |
+| `chat:{chatId:N}:meta` | per-chat metadata |
+| `chat:{chatId:N}:messages` | per-chat message list |
+
+`DisposeAsync` in `IntegrationChatsTests` must use `ManualsWebApplicationFactory.TestUserId` — **not** any email string — when constructing the cleanup key. If you ever migrate the user identifier again, grep the entire `Manuals.Tests/` directory for all usages before considering the migration complete.
 
 ### SDK caveat — `ResponseItem.CreateAssistantMessageItem`
 

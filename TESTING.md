@@ -13,6 +13,8 @@ The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests**
 
 ## Running tests locally
 
+> **Build configuration:** `--configuration Release` is shown below for consistency with CI, but `--configuration Debug` is equally valid for local test runs and compiles faster. There is no Angular build or other Release-only artifact involved in Manuals tests.
+
 ### Prerequisites
 
 Unit tests require no Azure credentials. For integration tests, authenticate first and set the following environment variables:
@@ -34,7 +36,7 @@ az login   # Azure CLI — required for integration tests (real Redis + OpenAI v
 ### Unit tests
 
 ```bash
-dotnet test --project Manuals.Tests --configuration Release \
+dotnet test --project Manuals.Tests --configuration Debug \
   -- --filter-trait "Category=Unit"
 ```
 
@@ -49,16 +51,16 @@ export OpenAIEndpoint="https://<your-resource>.openai.azure.com/"
 export OpenAIModel="gpt-4o"
 export OpenAIMaxOutputTokenCount=512
 
-dotnet test --project Manuals.Tests --no-build --configuration Release \
+dotnet test --project Manuals.Tests --no-build --configuration Debug \
   -- --filter-trait "Category=Integration"
 ```
 
-> **Data isolation:** integration tests write to real Redis using the email `integration@test.invalid` and clean up all created keys in `IAsyncDisposable.DisposeAsync` — `user:integration@test.invalid:chats` and `chat:{chatId:N}:meta` / `chat:{chatId:N}:messages` for each created chat. Running multiple integration test runs concurrently against the same Redis instance is not supported.
+> **Data isolation:** integration tests write to real Redis using the subject ID `integration-user-id` (`ManualsWebApplicationFactory.TestUserId`) and clean up all created keys in `IAsyncDisposable.DisposeAsync` — `user:integration-user-id:chats` and `chat:{chatId:N}:meta` / `chat:{chatId:N}:messages` for each created chat. Running multiple integration test runs concurrently against the same Redis instance is not supported.
 
 ### Run all tests
 
 ```bash
-dotnet test Manuals.slnx --configuration Release
+dotnet test Manuals.slnx --configuration Debug
 ```
 
 ---
@@ -67,11 +69,11 @@ dotnet test Manuals.slnx --configuration Release
 
 ### `ManualsWebApplicationFactory`
 
-`WebApplicationFactory<Program>` used by integration tests. Starts the full application with production configuration (real Redis, real Azure OpenAI). The only replacement is the logger factory (plain console, no Elasticsearch sink). Authentication is replaced with a test scheme that always authenticates as `integration@test.invalid`.
+`WebApplicationFactory<Program>` used by integration tests. Starts the full application with production configuration (real Redis, real Azure OpenAI). The only replacement is the logger factory (plain console, no Elasticsearch sink). Authentication is replaced with a test scheme that always authenticates as `sub = ManualsWebApplicationFactory.TestUserId` (`"integration-user-id"`).
 
 ### `IntegrationAuthHandler`
 
-An `AuthenticationHandler` registered as the default scheme in `ManualsWebApplicationFactory`. Always succeeds and returns a principal with `email = integration@test.invalid`. This allows the integration tests to call the API without a real JWT.
+An `AuthenticationHandler` registered as the default scheme in `ManualsWebApplicationFactory`. Always succeeds and returns a principal with `sub = ManualsWebApplicationFactory.TestUserId`. This allows the integration tests to call the API without a real JWT.
 
 ### `IntegrationCollection` / `IntegrationChatsTests`
 

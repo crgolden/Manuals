@@ -22,13 +22,13 @@ public sealed class ChatsController : ControllerBase
         _chatsService = chatsService;
     }
 
-    private string Email => User.FindFirstValue("email") ?? throw new InvalidOperationException("Missing email.");
+    private string UserId => User.FindFirstValue("sub") ?? throw new InvalidOperationException("Missing sub.");
 
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<Chat>>(Status200OK)]
     public async Task<IActionResult> GetChatsAsync(CancellationToken cancellationToken)
     {
-        var chats = await _chatsService.GetChatsAsync(Email, cancellationToken);
+        var chats = await _chatsService.GetChatsAsync(UserId, cancellationToken);
         return Ok(chats);
     }
 
@@ -39,7 +39,7 @@ public sealed class ChatsController : ControllerBase
     {
         try
         {
-            var chat = await _chatsService.GetChatAsync(Email, chatId, cancellationToken);
+            var chat = await _chatsService.GetChatAsync(UserId, chatId, cancellationToken);
             return Ok(chat);
         }
         catch (KeyNotFoundException)
@@ -55,7 +55,7 @@ public sealed class ChatsController : ControllerBase
     {
         try
         {
-            var messages = await _chatsService.GetChatMessagesAsync(Email, chatId, cancellationToken);
+            var messages = await _chatsService.GetChatMessagesAsync(UserId, chatId, cancellationToken);
             return Ok(messages);
         }
         catch (KeyNotFoundException)
@@ -68,7 +68,7 @@ public sealed class ChatsController : ControllerBase
     [ProducesResponseType<Chat>(Status201Created)]
     public async Task<IActionResult> PostChatAsync(CancellationToken cancellationToken)
     {
-        var chat = await _chatsService.CreateChatAsync(Email, cancellationToken);
+        var chat = await _chatsService.CreateChatAsync(UserId, cancellationToken);
         return CreatedAtAction(nameof(GetChatAsync), new { chatId = chat.ChatId }, chat);
     }
 
@@ -87,7 +87,7 @@ public sealed class ChatsController : ControllerBase
 
         try
         {
-            await _chatsService.UpdateChatTitleAsync(Email, chatId, patch.Title, cancellationToken);
+            await _chatsService.UpdateChatTitleAsync(UserId, chatId, patch.Title, cancellationToken);
             return NoContent();
         }
         catch (KeyNotFoundException)
@@ -103,7 +103,7 @@ public sealed class ChatsController : ControllerBase
     {
         try
         {
-            await _chatsService.DeleteChatAsync(Email, chatId, cancellationToken);
+            await _chatsService.DeleteChatAsync(UserId, chatId, cancellationToken);
             return NoContent();
         }
         catch (KeyNotFoundException)
@@ -126,7 +126,7 @@ public sealed class ChatsController : ControllerBase
 
         try
         {
-            var response = await _chatsService.CompleteChatAsync(Email, chatId, request.Input, cancellationToken);
+            var response = await _chatsService.CompleteChatAsync(UserId, chatId, request.Input, cancellationToken);
             return Ok(new ChatResponse(response.OutputText, response.ChatId));
         }
         catch (KeyNotFoundException)
@@ -152,7 +152,7 @@ public sealed class ChatsController : ControllerBase
             HttpContext.Features.GetRequiredFeature<IHttpResponseBodyFeature>().DisableBuffering();
             Response.ContentType = EventStream;
 
-            await foreach (var delta in _chatsService.StreamChatAsync(Email, chatId, request.Input, cancellationToken))
+            await foreach (var delta in _chatsService.StreamChatAsync(UserId, chatId, request.Input, cancellationToken))
             {
                 var json = JsonSerializer.Serialize(new { delta = new { content = delta } });
                 await Response.WriteAsync($"data: {json}\n\n", cancellationToken);

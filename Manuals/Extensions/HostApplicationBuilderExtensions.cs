@@ -5,7 +5,6 @@ using System.ClientModel.Primitives;
 using System.Net;
 using Azure.Core;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
-using Azure.Security.KeyVault.Secrets;
 using Elastic.Ingest.Elasticsearch;
 using Elastic.Ingest.Elasticsearch.DataStreams;
 using Elastic.Serilog.Sinks;
@@ -24,16 +23,10 @@ public static class HostApplicationBuilderExtensions
 {
     extension(IHostApplicationBuilder builder)
     {
-        public async Task<IHostApplicationBuilder> AddObservabilityAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
+        public IHostApplicationBuilder AddObservability(string elasticsearchUsername, string elasticsearchPassword)
         {
             var applicationName = builder.Configuration["WEBSITE_SITE_NAME"];
             var elasticsearchNode = builder.Configuration.GetValue<Uri?>("ElasticsearchNode") ?? throw new InvalidOperationException("Invalid 'ElasticsearchNode'.");
-            var tasks = new[]
-            {
-                secretClient.GetSecretAsync("ElasticsearchUsername", cancellationToken: cancellationToken),
-                secretClient.GetSecretAsync("ElasticsearchPassword", cancellationToken: cancellationToken),
-            };
-            var result = await Task.WhenAll(tasks);
             builder.Logging.AddOpenTelemetry(openTelemetryLoggerOptions =>
             {
                 openTelemetryLoggerOptions.IncludeFormattedMessage = true;
@@ -110,7 +103,7 @@ public static class HostApplicationBuilderExtensions
                             },
                             transportConfiguration =>
                             {
-                                var header = new BasicAuthentication(result[0].Value.Value, result[1].Value.Value);
+                                var header = new BasicAuthentication(elasticsearchUsername, elasticsearchPassword);
                                 transportConfiguration.Authentication(header);
                             });
                 }
@@ -138,15 +131,14 @@ public static class HostApplicationBuilderExtensions
             return builder;
         }
 
-        public async Task<IHostApplicationBuilder> AddCachingAsync(SecretClient secretClient, CancellationToken cancellationToken = default)
+        public async Task<IHostApplicationBuilder> AddCachingAsync(string redisPassword, CancellationToken cancellationToken = default)
         {
-            var redisPassword = await secretClient.GetSecretAsync("RedisPassword", cancellationToken: cancellationToken) ?? throw new InvalidOperationException("Invalid 'Redis Password'.");
             var redisHost = builder.Configuration.GetValue<string?>("RedisHost") ?? throw new InvalidOperationException("Invalid 'RedisHost'.");
             var redisPort = builder.Configuration.GetValue<int?>("RedisPort") ?? throw new InvalidOperationException("Invalid 'RedisPort'.");
             var configurationOptions = new ConfigurationOptions
             {
                 Ssl = true,
-                Password = redisPassword.Value.Value,
+                Password = redisPassword,
                 EndPoints = [new DnsEndPoint(redisHost, redisPort)]
             };
             var muxer = await ConnectionMultiplexer.ConnectAsync(configurationOptions);

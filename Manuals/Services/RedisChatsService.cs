@@ -33,9 +33,9 @@ public sealed class RedisChatsService : IChatsService
         _instructions = configuration.GetValue<string?>("OpenAIInstructions");
     }
 
-    public async Task<IReadOnlyList<Chat>> GetChatsAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Chat>> GetChatsAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var members = await _database.SortedSetRangeByRankAsync(ChatsKey(email), order: Order.Descending);
+        var members = await _database.SortedSetRangeByRankAsync(ChatsKey(userId), order: Order.Descending);
         var chats = new List<Chat>(members.Length);
         foreach (var member in members)
         {
@@ -53,40 +53,40 @@ public sealed class RedisChatsService : IChatsService
         return chats;
     }
 
-    public async Task<Chat> GetChatAsync(string email, Guid chatId, CancellationToken cancellationToken = default)
+    public async Task<Chat> GetChatAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        await VerifyOwnershipAsync(email, chatId);
+        await VerifyOwnershipAsync(userId, chatId);
         var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
         var title = GetMetaField(meta, TitleField);
         var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
         return new Chat(chatId, IsNullOrEmpty(title) ? null : title, createdAt);
     }
 
-    public async Task<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesAsync(string email, Guid chatId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        await VerifyOwnershipAsync(email, chatId);
+        await VerifyOwnershipAsync(userId, chatId);
         return await GetChatMessagesInternalAsync(chatId);
     }
 
-    public async Task<Chat> CreateChatAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<Chat> CreateChatAsync(string userId, CancellationToken cancellationToken = default)
     {
         var chatId = Guid.NewGuid();
         var createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         HashEntry[] meta = [new HashEntry(TitleField, string.Empty), new HashEntry("createdAt", createdAt)];
         await _database.HashSetAsync(ChatMetaKey(chatId), meta);
-        await _database.SortedSetAddAsync(ChatsKey(email), chatId.ToString("N"), (double)createdAt);
+        await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), (double)createdAt);
         return new Chat(chatId, null, createdAt);
     }
 
-    public async Task UpdateChatTitleAsync(string email, Guid chatId, string title, CancellationToken cancellationToken = default)
+    public async Task UpdateChatTitleAsync(string userId, Guid chatId, string title, CancellationToken cancellationToken = default)
     {
-        await VerifyOwnershipAsync(email, chatId);
+        await VerifyOwnershipAsync(userId, chatId);
         await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
     }
 
-    public async Task DeleteChatAsync(string email, Guid chatId, CancellationToken cancellationToken = default)
+    public async Task DeleteChatAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        var key = ChatsKey(email);
+        var key = ChatsKey(userId);
         var score = await _database.SortedSetScoreAsync(key, chatId.ToString("N"));
         if (score is null)
         {
@@ -98,7 +98,7 @@ public sealed class RedisChatsService : IChatsService
     }
 
     public async Task<(Guid ChatId, string? OutputText)> CompleteChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         string inputText,
         CancellationToken cancellationToken = default)
@@ -108,7 +108,7 @@ public sealed class RedisChatsService : IChatsService
             throw new ArgumentNullException(nameof(inputText));
         }
 
-        await VerifyOwnershipAsync(email, chatId);
+        await VerifyOwnershipAsync(userId, chatId);
 
         var history = await GetChatMessagesInternalAsync(chatId);
         var inputItems = BuildInputItems(history, inputText);
@@ -126,14 +126,14 @@ public sealed class RedisChatsService : IChatsService
         var outputText = response?.Value?.GetOutputText() ?? throw new InvalidOperationException("OpenAI returned no output.");
 
         await StoreMessagesAsync(chatId, inputText, outputText);
-        await _database.SortedSetAddAsync(ChatsKey(email), chatId.ToString("N"), Score());
+        await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), Score());
         await SetAutoTitleIfNeededAsync(chatId, inputText);
 
         return (chatId, outputText);
     }
 
     public IAsyncEnumerable<string> StreamChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         string inputText,
         CancellationToken cancellationToken = default)
@@ -143,10 +143,10 @@ public sealed class RedisChatsService : IChatsService
             throw new ArgumentNullException(nameof(inputText));
         }
 
-        return StreamChatAsyncCore(email, chatId, inputText, cancellationToken);
+        return StreamChatAsyncCore(userId, chatId, inputText, cancellationToken);
     }
 
-    private static string ChatsKey(string email) => $"user:{email}:chats";
+    private static string ChatsKey(string userId) => $"user:{userId}:chats";
 
     private static string ChatMetaKey(Guid chatId) => $"chat:{chatId:N}:meta";
 
@@ -175,12 +175,12 @@ public sealed class RedisChatsService : IChatsService
     }
 
     private async IAsyncEnumerable<string> StreamChatAsyncCore(
-        string email,
+        string userId,
         Guid chatId,
         string inputText,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await VerifyOwnershipAsync(email, chatId);
+        await VerifyOwnershipAsync(userId, chatId);
 
         var history = await GetChatMessagesInternalAsync(chatId);
         var inputItems = BuildInputItems(history, inputText);
@@ -211,7 +211,7 @@ public sealed class RedisChatsService : IChatsService
             if (!IsNullOrEmpty(assistantText))
             {
                 await StoreMessagesAsync(chatId, inputText, assistantText);
-                await _database.SortedSetAddAsync(ChatsKey(email), chatId.ToString("N"), Score());
+                await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), Score());
                 await SetAutoTitleIfNeededAsync(chatId, inputText);
             }
         }
@@ -233,9 +233,9 @@ public sealed class RedisChatsService : IChatsService
         return messages;
     }
 
-    private async Task VerifyOwnershipAsync(string email, Guid chatId)
+    private async Task VerifyOwnershipAsync(string userId, Guid chatId)
     {
-        var score = await _database.SortedSetScoreAsync(ChatsKey(email), chatId.ToString("N"));
+        var score = await _database.SortedSetScoreAsync(ChatsKey(userId), chatId.ToString("N"));
         if (score is null)
         {
             throw new KeyNotFoundException($"Chat '{chatId:N}' not found for user.");

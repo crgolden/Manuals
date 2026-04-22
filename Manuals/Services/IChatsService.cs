@@ -5,42 +5,42 @@ using Models;
 public interface IChatsService
 {
     Task<IReadOnlyList<Chat>> GetChatsAsync(
-        string email,
+        string userId,
         CancellationToken cancellationToken = default);
 
     Task<Chat> GetChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesAsync(
-        string email,
+        string userId,
         Guid chatId,
         CancellationToken cancellationToken = default);
 
     Task<Chat> CreateChatAsync(
-        string email,
+        string userId,
         CancellationToken cancellationToken = default);
 
     Task UpdateChatTitleAsync(
-        string email,
+        string userId,
         Guid chatId,
         string title,
         CancellationToken cancellationToken = default);
 
     Task DeleteChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         CancellationToken cancellationToken = default);
 
     Task<(Guid ChatId, string? OutputText)> CompleteChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         string inputText,
         CancellationToken cancellationToken = default);
 
     IAsyncEnumerable<string> StreamChatAsync(
-        string email,
+        string userId,
         Guid chatId,
         string inputText,
         CancellationToken cancellationToken = default);

@@ -20,7 +20,14 @@ try
 
     var tokenCredential = await builder.Configuration.ToTokenCredentialAsync();
     var secretClient = builder.Configuration.ToSecretClient(tokenCredential);
-    await builder.AddCachingAsync(secretClient);
+
+    // Fetch all Key Vault secrets in one parallel batch to avoid sequential round trips.
+    var secrets = await Task.WhenAll(
+        secretClient.GetSecretAsync("ElasticsearchUsername"),
+        secretClient.GetSecretAsync("ElasticsearchPassword"),
+        secretClient.GetSecretAsync("RedisPassword"));
+
+    await builder.AddCachingAsync(secrets[2].Value.Value);
     builder.AddOpenAI(tokenCredential);
     builder.Services.AddScoped<IChatsService, RedisChatsService>();
     builder.Services.AddControllers(options =>
@@ -33,7 +40,7 @@ try
     });
     builder.Services.AddSignalR();
     builder.Services.AddOpenApi();
-    await builder.AddObservabilityAsync(secretClient);
+    builder.AddObservability(secrets[0].Value.Value, secrets[1].Value.Value);
     builder.AddDataProtection(tokenCredential);
     builder.Services.AddHealthChecks();
     builder.AddAuth();

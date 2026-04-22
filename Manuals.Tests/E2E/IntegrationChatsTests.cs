@@ -16,7 +16,8 @@ using StackExchange.Redis;
 /// <remarks>
 /// Requires Azure login and the following environment variables:
 /// <c>RedisHost</c>, <c>RedisPort</c>, <c>OpenAIEndpoint</c>, <c>OpenAIModel</c>.
-/// Clean-up deletes all Redis keys prefixed <c>user:integration@test.invalid:*</c>
+/// Clean-up deletes all Redis keys prefixed
+/// <c>user:{ManualsWebApplicationFactory.TestUserId}:*</c>
 /// and <c>chat:{chatId:N}:*</c> for chats created during the run.
 /// </remarks>
 [Collection(IntegrationCollection.Name)]
@@ -40,17 +41,19 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
-        // Act: send a message expected to yield a short, unambiguous answer.
+        // Act: send a domain-appropriate question so the system prompt does not reject it.
+        // This test verifies the end-to-end completion pipeline (HTTP → OpenAI → Redis → HTTP),
+        // not the specific wording of the model's answer.
         var response = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("What is 2+2? Reply with only the number."),
+            new ChatRequest("Can you help me find the manual for an LG OLED TV?"),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result?.Output);
-        Assert.Contains("4", result.Output, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(result.Output), "Expected a non-empty response from the completion endpoint.");
     }
 
     [Fact]
@@ -120,7 +123,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         }
 
         await _database.SortedSetRemoveRangeByScoreAsync(
-            $"user:{ManualsWebApplicationFactory.TestEmail}:chats",
+            $"user:{ManualsWebApplicationFactory.TestUserId}:chats",
             double.NegativeInfinity,
             double.PositiveInfinity);
     }

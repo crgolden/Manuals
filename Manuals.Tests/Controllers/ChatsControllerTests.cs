@@ -13,7 +13,7 @@ using Moq;
 [Trait("Category", "Unit")]
 public sealed class ChatsControllerTests
 {
-    private const string TestEmail = "test@example.com";
+    private const string TestUserId = "aabbccdd-1122-3344-5566-778899001122";
     private static readonly Guid TestChatId = new("aabbccdd-1122-3344-5566-778899aabbcc");
     private static readonly Guid MissingChatId = Guid.Empty;
 
@@ -35,7 +35,7 @@ public sealed class ChatsControllerTests
             new Chat(new Guid("22222222-2222-2222-2222-222222222222"), "Second Chat", 1_699_999_000L),
         ];
         _chatsServiceMock
-            .Setup(s => s.GetChatsAsync(TestEmail, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatsAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chats);
 
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
@@ -51,7 +51,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.GetChatsAsync(TestEmail, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatsAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
@@ -67,7 +67,7 @@ public sealed class ChatsControllerTests
         _controller.ControllerContext = CreateContextWithUser();
         var chat = new Chat(TestChatId, "My Chat", 1_700_000_000L);
         _chatsServiceMock
-            .Setup(s => s.GetChatAsync(TestEmail, TestChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chat);
 
         var result = await _controller.GetChatAsync(TestChatId, TestContext.Current.CancellationToken);
@@ -84,7 +84,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.GetChatAsync(TestEmail, MissingChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
         var result = await _controller.GetChatAsync(MissingChatId, TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed class ChatsControllerTests
             new ChatHistoryMessage("assistant", "Hi there!"),
         ];
         _chatsServiceMock
-            .Setup(s => s.GetChatMessagesAsync(TestEmail, TestChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatMessagesAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(messages);
 
         var result = await _controller.GetChatMessagesAsync(TestChatId, TestContext.Current.CancellationToken);
@@ -119,7 +119,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.GetChatMessagesAsync(TestEmail, MissingChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetChatMessagesAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
         var result = await _controller.GetChatMessagesAsync(MissingChatId, TestContext.Current.CancellationToken);
@@ -139,7 +139,7 @@ public sealed class ChatsControllerTests
         _controller.ControllerContext = CreateContextWithUser();
         var chat = new Chat(TestChatId, null, 1_700_000_000L);
         _chatsServiceMock
-            .Setup(s => s.CreateChatAsync(TestEmail, It.IsAny<CancellationToken>()))
+            .Setup(s => s.CreateChatAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chat);
 
         var result = await _controller.PostChatAsync(TestContext.Current.CancellationToken);
@@ -178,7 +178,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.UpdateChatTitleAsync(TestEmail, TestChatId, "New Title", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UpdateChatTitleAsync(TestUserId, TestChatId, "New Title", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         var patch = new ChatPatchRequest("New Title");
 
@@ -192,7 +192,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.UpdateChatTitleAsync(TestEmail, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.UpdateChatTitleAsync(TestUserId, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
         var patch = new ChatPatchRequest("New Title");
 
@@ -206,7 +206,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.DeleteChatAsync(TestEmail, TestChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteChatAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var result = await _controller.DeleteChatAsync(TestChatId, TestContext.Current.CancellationToken);
@@ -219,7 +219,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.DeleteChatAsync(TestEmail, MissingChatId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.DeleteChatAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
         var result = await _controller.DeleteChatAsync(MissingChatId, TestContext.Current.CancellationToken);
@@ -254,7 +254,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.CompleteChatAsync(TestEmail, TestChatId, "Hello", It.IsAny<CancellationToken>()))
+            .Setup(s => s.CompleteChatAsync(TestUserId, TestChatId, "Hello", It.IsAny<CancellationToken>()))
             .ReturnsAsync((TestChatId, "Hi there!"));
         var request = new ChatRequest("Hello");
 
@@ -271,7 +271,7 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
-            .Setup(s => s.CompleteChatAsync(TestEmail, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.CompleteChatAsync(TestUserId, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
         var request = new ChatRequest("Hello");
 
@@ -308,11 +308,11 @@ public sealed class ChatsControllerTests
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("email", TestEmail)]));
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         _chatsServiceMock
-            .Setup(s => s.StreamChatAsync(TestEmail, TestChatId, "Hello", It.IsAny<CancellationToken>()))
+            .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, "Hello", It.IsAny<CancellationToken>()))
             .Returns(SingleDelta("Hello", TestContext.Current.CancellationToken));
 
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest("Hello"), TestContext.Current.CancellationToken);
@@ -330,11 +330,11 @@ public sealed class ChatsControllerTests
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("email", TestEmail)]));
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         _chatsServiceMock
-            .Setup(s => s.StreamChatAsync(TestEmail, TestChatId, "Hello", It.IsAny<CancellationToken>()))
+            .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, "Hello", It.IsAny<CancellationToken>()))
             .Returns(SingleDelta("world", TestContext.Current.CancellationToken));
 
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest("Hello"), TestContext.Current.CancellationToken);
@@ -352,9 +352,9 @@ public sealed class ChatsControllerTests
         yield return value;
     }
 
-    private static ControllerContext CreateContextWithUser(string email = TestEmail)
+    private static ControllerContext CreateContextWithUser(string userId = TestUserId)
     {
-        var identity = new ClaimsIdentity([new Claim("email", email)]);
+        var identity = new ClaimsIdentity([new Claim("sub", userId)]);
         var user = new ClaimsPrincipal(identity);
         return new ControllerContext { HttpContext = new DefaultHttpContext { User = user } };
     }

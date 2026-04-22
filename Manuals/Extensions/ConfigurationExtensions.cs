@@ -14,7 +14,14 @@ public static class ConfigurationExtensions
             var credential = new DefaultAzureCredential(options);
             var context = new TokenRequestContext([scope]);
             var token = await credential.GetTokenAsync(context, cancellationToken);
-            return IsNullOrWhiteSpace(token.Token) ? throw new InvalidOperationException("Failed to acquire token for Azure Key Vault access.") : credential;
+            if (IsNullOrWhiteSpace(token.Token))
+            {
+                throw new InvalidOperationException("Failed to acquire token for Azure Key Vault access.");
+            }
+
+            // Wrap in a caching credential so BearerTokenAuthenticationPolicy reuses this token
+            // instead of spawning a second az process on the first GetSecretAsync call.
+            return new CachingTokenCredential(credential, context, token);
         }
 
         public SecretClient ToSecretClient(TokenCredential credential)

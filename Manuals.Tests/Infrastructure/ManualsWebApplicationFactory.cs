@@ -18,12 +18,18 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 /// <remarks>
 /// Tests using this factory must clean up any Redis keys they create.
-/// Use the <c>integration@test.invalid</c> email prefix to identify test data:
-/// Redis key <c>user:integration@test.invalid:chats</c>.
+/// Use <see cref="TestUserId"/> to identify test data — it is the <c>sub</c> claim
+/// issued by <see cref="IntegrationAuthHandler"/>, so the Redis key is
+/// <c>user:{TestUserId}:chats</c>.
 /// </remarks>
 public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>
 {
-    internal const string TestEmail = "integration@test.invalid";
+    /// <summary>
+    /// The <c>sub</c> claim value issued by <see cref="IntegrationAuthHandler"/>.
+    /// Use this to construct and clean up Redis keys in integration tests.
+    /// </summary>
+    internal const string TestUserId = "integration-user-id";
+
     internal const string TestScheme = "Integration";
 
     /// <inheritdoc/>
