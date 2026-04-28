@@ -6,6 +6,17 @@
 
 An ASP.NET Core 10 API that proxies requests to Azure OpenAI, providing REST endpoints for managing AI chat sessions with full message history stored in Redis.
 
+## Sibling Applications
+
+Manuals is a **resource server** in a five-app system. All endpoints require a JWT Bearer token with the `manuals` scope.
+
+| Repo | Role | How Manuals interacts |
+|---|---|---|
+| [Identity](https://github.com/crgolden/Identity) | OIDC Identity Provider | Issues the access tokens Manuals validates (scope `manuals`) |
+| [Experience](https://github.com/crgolden/Experience) | Angular SPA + ASP.NET Core BFF | Sole client today — the BFF proxies `/manuals/api/**` with an access token |
+| [Products](https://github.com/crgolden/Products) | OData v4 product catalog API | The `Product.ManualUrl` field is populated by the embedded chat panel that drives Manuals |
+| [Infrastructure](https://github.com/crgolden/Infrastructure) | Health monitoring dashboard | Polls Manuals' `/health` endpoint |
+
 ## Architecture
 
 ```
@@ -88,7 +99,7 @@ On the first message sent to a chat, the title is auto-set to the first 60 chara
 
 ```
 Manuals/               # ASP.NET Core 10 API — chat CRUD, OpenAI streaming, Redis persistence
-Manuals.Tests/         # xUnit v3 — unit tests (Moq) and nightly real-service tests
+Manuals.Tests/         # xUnit v3 — unit tests (Moq) and integration tests against real Azure Redis + OpenAI
 ```
 
 ## Commands
@@ -102,14 +113,14 @@ dotnet build
 # Unit tests only (no Azure required)
 dotnet test --project Manuals.Tests --configuration Release -- --filter-trait "Category=Unit"
 
-# Nightly tests (requires live Azure Redis + Azure OpenAI — az login required)
-ASPNETCORE_ENVIRONMENT=Development dotnet test --project Manuals.Tests --configuration Release -- --filter-trait "Category=Nightly"
+# Integration tests (requires live Azure Redis + Azure OpenAI — az login required)
+ASPNETCORE_ENVIRONMENT=Development dotnet test --project Manuals.Tests --configuration Release -- --filter-trait "Category=Integration"
 
 # Publish web app
 dotnet publish Manuals -c Release -o ./publish
 ```
 
-See [TESTING.md](TESTING.md) for the full testing guide — unit tests, nightly real-service tests, local prerequisites, and CI pipeline details.
+See [TESTING.md](TESTING.md) for the full testing guide — unit tests, integration tests against real Azure resources, local prerequisites, and CI pipeline details.
 
 ## Known SDK Caveat
 
@@ -124,7 +135,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests. Pull
 **Build job** — runs on every trigger:
 1. Builds the solution (`dotnet build --configuration Release`)
 2. Runs unit tests with coverage
-3. Logs in to Azure via OIDC and runs nightly tests (on `schedule` or `workflow_dispatch` only)
+3. Logs in to Azure via OIDC and runs integration tests (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
 4. Publishes the web app and uploads the artifact
 
 **Deploy job** — runs after a successful build on `main`:
