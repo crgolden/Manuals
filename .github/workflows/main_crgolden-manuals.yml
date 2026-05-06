@@ -128,7 +128,9 @@ jobs:
           OpenAIEndpoint: ${{ vars.OPENAI_ENDPOINT }}
           OpenAIModel: ${{ vars.OPENAI_MODEL }}
           OpenAIMaxOutputTokenCount: 512
+          OpenAIInstructions: ${{ vars.OPENAI_INSTRUCTIONS }}
           OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
+          RedisPassword: ${{ secrets.REDIS_PASSWORD }}
         run: |
           dotnet-coverage collect `
             "dotnet test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
