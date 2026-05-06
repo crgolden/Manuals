@@ -1,5 +1,6 @@
 #pragma warning disable SA1200
 #pragma warning disable OPENAI001
+using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Diagnostics;
 using System.Net;
@@ -33,6 +34,11 @@ try
     var builder = WebApplication.CreateBuilder(args);
     Uri oidcAuthority = builder.Configuration.GetRequired<Uri>("OidcAuthority"),
         openAIEndpoint = builder.Configuration.GetRequired<Uri>("OpenAIEndpoint");
+    var openAIClientOptions = new OpenAIClientOptions
+    {
+        Endpoint = new Uri($"{openAIEndpoint}openai/v1/")
+    };
+    ResponsesClient responsesClient;
     var redisHost = builder.Configuration.GetRequired<string>("RedisHost");
     var redisPort = builder.Configuration.GetRequired<int>("RedisPort");
     var redisSsl = builder.Configuration.GetRequired<bool>("RedisSsl");
@@ -42,18 +48,13 @@ try
         Ssl = redisSsl,
         EndPoints = [redisEndpoint]
     };
-    ResponsesClient responsesClient;
     if (builder.Environment.IsProduction())
     {
         var defaultAzureCredentialOptionsSection = builder.Configuration.GetRequiredSection(nameof(DefaultAzureCredentialOptions));
         var defaultAzureCredentialOptions = defaultAzureCredentialOptionsSection.Get<DefaultAzureCredentialOptions>() ?? throw new InvalidOperationException($"Invalid '{nameof(DefaultAzureCredentialOptions)}' section.");
         var tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
-        var policy = new BearerTokenPolicy(tokenCredential, "https://cognitiveservices.azure.com/.default");
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = new Uri($"{openAIEndpoint}openai/v1/")
-        };
-        responsesClient = new ResponsesClient(policy, clientOptions);
+        var bearerTokenPolicy = new BearerTokenPolicy(tokenCredential, "https://cognitiveservices.azure.com/.default");
+        responsesClient = new ResponsesClient(bearerTokenPolicy, openAIClientOptions);
         Uri blobUri = builder.Configuration.GetRequired<Uri>("BlobUri"),
             dataProtectionKeyIdentifier = builder.Configuration.GetRequired<Uri>("DataProtectionKeyIdentifier"),
             elasticsearchNode = builder.Configuration.GetRequired<Uri>("ElasticsearchNode"),
@@ -119,7 +120,8 @@ try
 
         var secrets = builder.Configuration.GetManualsSecrets();
         configurationOptions.Password = secrets.RedisPassword;
-        responsesClient = new ResponsesClient(secrets.OpenAIApiKey);
+        var apiKeyCredential = new ApiKeyCredential(secrets.OpenAIApiKey);
+        responsesClient = new ResponsesClient(apiKeyCredential, openAIClientOptions);
         builder.Services
             .AddSerilog((serviceProvider, loggerConfiguration) => loggerConfiguration
                 .ReadFrom.Configuration(builder.Configuration)
