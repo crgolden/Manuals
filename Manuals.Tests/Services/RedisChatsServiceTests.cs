@@ -26,6 +26,7 @@ public sealed class RedisChatsServiceTests
             {
                 ["OpenAIModel"] = "gpt-4",
                 ["OpenAIMaxOutputTokenCount"] = "1000",
+                ["OpenAIInstructions"] = "test instructions",
             })
             .Build();
 
