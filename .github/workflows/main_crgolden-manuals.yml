@@ -121,16 +121,16 @@ jobs:
         id: integration
         env:
           ASPNETCORE_ENVIRONMENT: CI
-          APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ vars.APPLICATIONINSIGHTS_CONNECTION_STRING }}
           OidcAuthority: ${{ vars.OIDC_AUTHORITY }}
           RedisHost: ${{ vars.REDIS_HOST }}
           RedisPort: ${{ vars.REDIS_PORT }}
+          RedisSsl: true
+          RedisPassword: ${{ secrets.REDIS_PASSWORD }}
           OpenAIEndpoint: ${{ vars.OPENAI_ENDPOINT }}
           OpenAIModel: ${{ vars.OPENAI_MODEL }}
           OpenAIMaxOutputTokenCount: 512
           OpenAIInstructions: ${{ vars.OPENAI_INSTRUCTIONS }}
           OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
-          RedisPassword: ${{ secrets.REDIS_PASSWORD }}
         run: |
           dotnet-coverage collect `
             "dotnet test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
