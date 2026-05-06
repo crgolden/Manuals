@@ -1,10 +1,10 @@
 #pragma warning disable OPENAI001
 namespace Manuals.Services;
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Extensions;
 using Models;
 using OpenAI.Responses;
 using StackExchange.Redis;
@@ -19,7 +19,7 @@ public sealed class RedisChatsService : IChatsService
     private readonly IDatabase _database;
     private readonly string _model;
     private readonly int _maxOutputTokenCount;
-    private readonly string? _instructions;
+    private readonly string _instructions;
 
     public RedisChatsService(
         ResponsesClient responsesClient,
@@ -28,9 +28,9 @@ public sealed class RedisChatsService : IChatsService
     {
         _responsesClient = responsesClient;
         _database = database;
-        _model = configuration.GetValue<string?>("OpenAIModel") ?? throw new InvalidOperationException("Invalid 'OpenAIModel'.");
-        _maxOutputTokenCount = configuration.GetValue<int?>("OpenAIMaxOutputTokenCount") ?? throw new InvalidOperationException("Invalid 'OpenAIMaxOutputTokenCount'.");
-        _instructions = configuration.GetValue<string?>("OpenAIInstructions");
+        _model = configuration.GetRequired<string>("OpenAIModel");
+        _maxOutputTokenCount = configuration.GetRequired<int>("OpenAIMaxOutputTokenCount");
+        _instructions = configuration.GetRequired<string>("OpenAIInstructions");
     }
 
     public async Task<IReadOnlyList<Chat>> GetChatsAsync(string userId, CancellationToken cancellationToken = default)

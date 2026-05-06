@@ -1,34 +1,28 @@
 namespace Manuals.Extensions;
 
-using Azure.Core;
-using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
-
 public static class ConfigurationExtensions
 {
     extension(IConfiguration configuration)
     {
-        public async Task<TokenCredential> ToTokenCredentialAsync(string scope = "https://vault.azure.net/.default", CancellationToken cancellationToken = default)
+        public T GetRequired<T>(string key)
+            where T : notnull
         {
-            var options = configuration.GetSection(nameof(DefaultAzureCredentialOptions)).Get<DefaultAzureCredentialOptions>() ?? throw new InvalidOperationException($"Invalid '{nameof(DefaultAzureCredentialOptions)}' configuration.");
-            var credential = new DefaultAzureCredential(options);
-            var context = new TokenRequestContext([scope]);
-            var token = await credential.GetTokenAsync(context, cancellationToken);
-            if (IsNullOrWhiteSpace(token.Token))
-            {
-                throw new InvalidOperationException("Failed to acquire token for Azure Key Vault access.");
-            }
-
-            // Wrap in a caching credential so BearerTokenAuthenticationPolicy reuses this token
-            // instead of spawning a second az process on the first GetSecretAsync call.
-            return new CachingTokenCredential(credential, context, token);
+            return configuration.GetValue<T?>(key) ?? throw new InvalidOperationException($"Invalid '{key}'.");
         }
 
-        public SecretClient ToSecretClient(TokenCredential credential)
+#pragma warning disable SA1009
+        internal (
+            string RedisPassword,
+            string OpenAIApiKey
+        ) GetManualsSecrets()
         {
-            var keyVaultUrl = configuration.GetValue<Uri>("KeyVaultUri") ?? throw new InvalidOperationException("Invalid 'KeyVaultUri'.");
-            var secretClient = new SecretClient(keyVaultUrl, credential);
-            return secretClient;
+            var redisPassword = configuration.GetRequired<string>("RedisPassword");
+            var openAIApiKey = configuration.GetRequired<string>("OpenAIApiKey");
+            return (
+                redisPassword,
+                openAIApiKey
+            );
         }
+#pragma warning restore SA1009
     }
 }
