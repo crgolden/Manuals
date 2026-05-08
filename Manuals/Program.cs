@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.Azure;
 using OpenAI;
 using OpenAI.Responses;
+using OpenTelemetry.Instrumentation.AspNetCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -63,6 +64,8 @@ try
         var secretClient = new SecretClient(keyVaultUrl, tokenCredential);
         var secrets = secretClient.GetManualsSecrets();
         configurationOptions.Password = secrets.RedisPassword.Value;
+        builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
+            options.Filter = context => !context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase));
         builder.Logging.AddOpenTelemetry(openTelemetryLoggerOptions =>
         {
             openTelemetryLoggerOptions.IncludeFormattedMessage = true;
@@ -93,17 +96,11 @@ try
                     ["deployment.environment"] = builder.Environment.EnvironmentName.ToLowerInvariant()
                 }))
             .WithMetrics(meterProviderBuilder => meterProviderBuilder
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation())
             .WithTracing(tracerProviderBuilder => tracerProviderBuilder
                 .SetSampler(new AlwaysOnSampler())
                 .AddSource(nameof(Manuals))
-                .AddAspNetCoreInstrumentation(aspNetCoreTraceInstrumentationOptions =>
-                {
-                    aspNetCoreTraceInstrumentationOptions.Filter = context => !context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase);
-                })
-                .AddHttpClientInstrumentation())
+                .AddRedisInstrumentation())
             .UseAzureMonitor().Services
             .AddDataProtection()
             .SetApplicationName(applicationName)

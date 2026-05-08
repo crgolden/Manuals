@@ -108,14 +108,6 @@ jobs:
           name: test-results
           path: Manuals.Tests/bin/Release/net10.0/TestResults/
 
-      - name: Login to Azure (for integration tests)
-        if: github.event_name != 'pull_request'
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8DE5AD040E9A48B5ABB987D909C873E4 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_C329C8261C3244ACB850928362690ADC }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B09849552EEF4A26B6234A3254D8CEC1 }}
-
       - name: Run integration tests with coverage
         if: github.event_name != 'pull_request'
         id: integration

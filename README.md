@@ -21,56 +21,55 @@ Manuals is a **resource server** in a five-app system. All endpoints require a J
 
 ```
 Client
-  ├── GET/POST/PATCH/DELETE /api/chats     → ChatsController → RedisChatsService → Redis
-  ├── GET /api/chats/{id}/messages         → ChatsController → RedisChatsService → Redis
-  ├── POST /api/chats/{id}/messages        → ChatsController → RedisChatsService → ResponsesClient → Azure OpenAI
-  └── POST /api/chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
+  ├── GET/POST/PATCH/DELETE /chats     → ChatsController → RedisChatsService → Redis
+  ├── GET /chats/{id}/messages         → ChatsController → RedisChatsService → Redis
+  ├── POST /chats/{id}/messages        → ChatsController → RedisChatsService → ResponsesClient → Azure OpenAI
+  └── POST /chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
 ```
 
 **Client authentication:** all endpoints require a JWT Bearer token with the `manuals` scope (issued by Identity, forwarded by the Experience BFF).
 
-**Azure service authentication:** `DefaultAzureCredential` — Managed Identity in Azure, `az login` locally — used to call Azure OpenAI. No secrets are stored in code or config.
+**Azure OpenAI authentication:** `DefaultAzureCredential` (Managed Identity) in production. `ApiKeyCredential` (`OpenAIApiKey` User Secret) in non-production — no `az login` needed locally.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | ASP.NET Core 10 (Minimal API) |
+| Framework | ASP.NET Core 10 (Controller API) |
 | AI | Azure OpenAI Responses API (`OpenAI.Responses`) |
 | Persistence | Azure Cache for Redis |
 | Auth | JWT Bearer (`manuals` scope) |
 | Observability | Azure Monitor, OpenTelemetry, Serilog, Elasticsearch |
-| Hosting | Azure App Service (Linux, .NET 10) |
-| Azure Identity | `DefaultAzureCredential` (Managed Identity in production) |
+| Hosting | Azure App Service (Windows, .NET 10, F1 plan) |
+| Cloud Identity | `DefaultAzureCredential` (Managed Identity in production) |
 
 ## Prerequisites
 
 | Tool | Notes |
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
-| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) | `az login` for local dev |
+| Azure OpenAI resource | Deployed model (accessible via API key in non-production) |
 | Azure OpenAI resource | Deployed model (e.g., `gpt-4o`) |
 | Redis instance | Azure Cache for Redis or local |
 
 ## Getting Started
 
-### 1. Authenticate with Azure
+### 1. Configure User Secrets
 
-```bash
-az login
-```
-
-### 2. Configure User Secrets
-
-```bash
+```powershell
+dotnet user-secrets set "OidcAuthority" "https://localhost:7261" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIEndpoint" "https://<your-resource>.openai.azure.com/" --project Manuals/Manuals.csproj
+dotnet user-secrets set "OpenAIApiKey" "<your-api-key>" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIModel" "gpt-4o" --project Manuals/Manuals.csproj
+dotnet user-secrets set "OpenAIInstructions" "You are a helpful assistant." --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIMaxOutputTokenCount" "4096" --project Manuals/Manuals.csproj
 dotnet user-secrets set "RedisHost" "<your-redis-host>" --project Manuals/Manuals.csproj
 dotnet user-secrets set "RedisPort" "6380" --project Manuals/Manuals.csproj
+dotnet user-secrets set "RedisSsl" "true" --project Manuals/Manuals.csproj
+dotnet user-secrets set "RedisPassword" "<your-redis-password>" --project Manuals/Manuals.csproj
 ```
 
-### 3. Run
+### 2. Run
 
 ```bash
 dotnet run --project Manuals/Manuals.csproj
@@ -80,20 +79,20 @@ App starts at `https://localhost:7099`. The OpenAPI spec is available at `GET /o
 
 ## API Reference
 
-All endpoints require a valid JWT Bearer token with the `manuals` scope. Full request/response schemas are available via the OpenAPI spec.
+All endpoints require a valid JWT Bearer token with the `manuals` scope.
 
 | Method | Route | Description |
 |--------|-------|-------------|
-| `GET` | `/api/chats` | All chats for the authenticated user, newest first |
-| `GET` | `/api/chats/{chatId}` | Single chat by ID |
-| `GET` | `/api/chats/{chatId}/messages` | Full message history for a chat |
-| `POST` | `/api/chats` | Create a new chat — returns `201 Created` with `Location` header |
-| `PATCH` | `/api/chats/{chatId}` | Update chat title (`Content-Type: application/merge-patch+json`) |
-| `DELETE` | `/api/chats/{chatId}` | Delete a chat and all its stored messages |
-| `POST` | `/api/chats/{chatId}/messages` | Send a message, receive a complete response |
-| `POST` | `/api/chats/{chatId}/messages/stream` | Send a message, receive a streaming SSE response |
+| `GET` | `/chats` | All chats for the authenticated user, newest first |
+| `GET` | `/chats/{chatId}` | Single chat by ID |
+| `GET` | `/chats/{chatId}/messages` | Full message history for a chat |
+| `POST` | `/chats` | Create a new chat — returns `201 Created` with `Location` header |
+| `PATCH` | `/chats/{chatId}` | Update chat title (`Content-Type: application/merge-patch+json`) |
+| `DELETE` | `/chats/{chatId}` | Delete a chat and all its stored messages |
+| `POST` | `/chats/{chatId}/messages` | Send a message, receive a complete response |
+| `POST` | `/chats/{chatId}/messages/stream` | Send a message, receive a streaming SSE response |
 
-On the first message sent to a chat, the title is auto-set to the first 60 characters of the user's input.
+On the first message sent to a chat, the title is auto-set to the first 60 characters of the user's input (with `…` if truncated).
 
 ## Project Structure
 
@@ -104,68 +103,54 @@ Manuals.Tests/         # xUnit v3 — unit tests (Moq) and integration tests aga
 
 ## Commands
 
-> **Shell note:** commands that set environment variables inline use bash syntax. On Windows, use Git Bash, WSL, or set the variables separately before running the `dotnet` command.
-
-```bash
+```powershell
 # Build
 dotnet build
 
 # Unit tests only (no Azure required)
-dotnet test --project Manuals.Tests --configuration Release -- --filter-trait "Category=Unit"
+dotnet build Manuals.Tests --configuration Debug
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Unit" --show-live-output on
 
-# Integration tests (requires live Azure Redis + Azure OpenAI — az login required)
-ASPNETCORE_ENVIRONMENT=Development dotnet test --project Manuals.Tests --configuration Release -- --filter-trait "Category=Integration"
+# Integration tests (requires live Redis + Azure OpenAI endpoint; no az login needed)
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Integration" --show-live-output on
 
-# Publish web app
-dotnet publish Manuals -c Release -o ./publish
+# Publish
+dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
 ```
 
-See [TESTING.md](TESTING.md) for the full testing guide — unit tests, integration tests against real Azure resources, local prerequisites, and CI pipeline details.
-
-## Known SDK Caveat
-
-`RedisChatsService` uses `ResponseItem.CreateAssistantMessageItem(string text)` to reconstruct assistant turns when sending full conversation history to the Responses API. This experimental factory method **may not be present in OpenAI SDK v2.10.0**.
-
-If the project fails to compile with a missing-method error, see the workaround in [`CLAUDE.md` → SDK caveat](CLAUDE.md#sdk-caveat--responseitemcreateassistantmessageitem).
+See [TESTING.md](TESTING.md) for the full testing guide.
 
 ## Deployment
 
-The GitHub Actions workflow triggers on pushes to `main` and pull requests. Pull requests run build and test only.
+The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 
 **Build job** — runs on every trigger:
 1. Builds the solution (`dotnet build --configuration Release`)
 2. Runs unit tests with coverage
 3. Logs in to Azure via OIDC and runs integration tests (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
-4. Publishes the web app and uploads the artifact
+4. Publishes the web app (`-r win-x86 --self-contained false`) and uploads the artifact
 
 **Deploy job** — runs after a successful build on `main`:
-1. Deploys the web app to **Azure App Service** via Azure OIDC
+1. Deploys the web app to **Azure App Service (Windows, F1)** via Azure OIDC
 
-### Azure Resources
+### Azure App Service Application Settings
 
-| Resource | Notes |
+| Key | Notes |
 |---|---|
-| Azure OpenAI | Requires a deployed model (e.g. `gpt-4o`) |
-| Azure Cache for Redis | SSL enabled, port 6380 |
-| Azure App Service (Linux, .NET 10) | Standard or higher plan |
-| Managed Identity (system-assigned) | Assign **Cognitive Services OpenAI User** role on the OpenAI resource |
-| App Registration (for GitHub Actions) | Add federated credential for `repo:<org>/Manuals:ref:refs/heads/main` |
-
-### App Service Application Settings
-
-| Key | Value |
-|---|---|
+| `OidcAuthority` | Identity server URL |
 | `OpenAIEndpoint` | `https://<your-resource>.openai.azure.com/` |
-| `OpenAIModel` | `gpt-4o` |
-| `OpenAIMaxOutputTokenCount` | `4096` |
+| `OpenAIModel` | Deployed model name (e.g. `gpt-4o`) |
+| `OpenAIInstructions` | System prompt |
+| `OpenAIMaxOutputTokenCount` | Max tokens per completion |
 | `RedisHost` | `<your-redis>.redis.cache.windows.net` |
 | `RedisPort` | `6380` |
+| `RedisSsl` | `true` |
+| `KeyVaultUri` | Azure Key Vault URL |
+| `BlobUri` | Azure Blob Storage URL (Data Protection keys) |
+| `DataProtectionKeyIdentifier` | Key Vault key URI |
+| `ElasticsearchNode` | Elasticsearch endpoint |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Azure Monitor connection string |
+| `DefaultAzureCredentialOptions__ExcludeManagedIdentityCredential` | `false` |
 
-### GitHub Actions Secrets
-
-| Secret | Description |
-|---|---|
-| `AZURE_CLIENT_ID` | App Registration client ID |
-| `AZURE_TENANT_ID` | Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
-| `AZURE_WEBAPP_NAME` | App Service name |
+Secrets (`RedisPassword`, `ElasticsearchUsername`, `ElasticsearchPassword`) are fetched from Azure Key Vault at startup via Managed Identity — do not set them as Application Settings.
