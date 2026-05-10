@@ -109,11 +109,11 @@ dotnet build
 
 # Unit tests only (no Azure required)
 dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Unit" --show-live-output on
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Unit" -showLiveOutput
 
 # Integration tests (requires live Redis + Azure OpenAI endpoint; no az login needed)
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Integration" --show-live-output on
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Integration" -showLiveOutput
 
 # Publish
 dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish

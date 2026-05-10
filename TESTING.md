@@ -17,7 +17,7 @@ For the `.NET 10 SDK xUnit caveat` (why `dotnet test` doesn't work) and `ASPNETC
 
 ```powershell
 dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Unit" --show-live-output on
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Unit" -showLiveOutput
 ```
 
 ### Integration Tests
@@ -30,10 +30,10 @@ Requires a running Redis instance and an Azure OpenAI endpoint. No `az login` ne
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait "Category=Integration" --show-live-output on
+.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Integration" -showLiveOutput
 
 # Redirect output for in-flight inspection
-cmd /c "Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe --filter-trait ""Category=Integration"" --show-live-output on > C:\temp\manuals-integration.txt 2>&1"
+cmd /c "Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
 ```
 
 ## Test Infrastructure
@@ -51,3 +51,22 @@ Integration tests write to real Redis using the key prefix `user:integration-use
 ### `IntegrationCollection` / `IntegrationChatsTests`
 
 A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFactory>`) wrapping all integration tests. `parallelizeTestCollections: false` is set in `xunit.runner.json`.
+
+---
+
+## Local SonarCloud analysis
+
+Generate coverage first (unit + integration), then run from `Manuals/`:
+
+```powershell
+$env:SONAR_TOKEN = "<token>"
+& "$env:SystemDrive\sonar-scanner-8.0.1.6346-windows-x64\bin\sonar-scanner.bat" `
+  "-Dsonar.projectKey=crgolden_Manuals" `
+  "-Dsonar.organization=crgolden" `
+  "-Dsonar.sources=Manuals" `
+  "-Dsonar.tests=Manuals.Tests" `
+  "-Dsonar.exclusions=**/bin/**,**/obj/**" `
+  "-Dsonar.cs.vscoveragexml.reportsPaths=coverage.xml,coverage-integration.xml"
+```
+
+Required coverage files: `coverage.xml`, `coverage-integration.xml`.
