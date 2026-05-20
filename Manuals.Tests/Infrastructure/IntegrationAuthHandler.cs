@@ -6,10 +6,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-/// Test-only authentication handler for integration tests.
-/// Always authenticates as an integration test user with the <c>manuals</c> scope.
-/// </summary>
 internal sealed class IntegrationAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     public IntegrationAuthHandler(

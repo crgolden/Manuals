@@ -9,17 +9,6 @@ using Manuals.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 
-/// <summary>
-/// Integration tests against real Azure Redis and Azure OpenAI.
-/// These tests use at most 3 real OpenAI completions per run.
-/// </summary>
-/// <remarks>
-/// Requires Azure login and the following environment variables:
-/// <c>RedisHost</c>, <c>RedisPort</c>, <c>OpenAIEndpoint</c>, <c>OpenAIModel</c>.
-/// Clean-up deletes all Redis keys prefixed
-/// <c>user:{ManualsWebApplicationFactory.TestUserId}:*</c>
-/// and <c>chat:{chatId:N}:*</c> for chats created during the run.
-/// </remarks>
 [Collection(IntegrationCollection.Name)]
 [Trait("Category", "Integration")]
 public sealed class IntegrationChatsTests : IAsyncDisposable
@@ -113,7 +102,6 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         Assert.Contains("Alice", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
         // Clean up test data from real Redis.
