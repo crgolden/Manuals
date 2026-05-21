@@ -108,12 +108,17 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         foreach (var chatId in _createdChatIds)
         {
             await _database.KeyDeleteAsync([$"chat:{chatId:N}:meta", $"chat:{chatId:N}:messages"]);
+
+            // HybridCache L2 keys (serialized C# objects under the manuals:hc: prefix).
+            await _database.KeyDeleteAsync($"manuals:hc:messages:{chatId:N}");
         }
 
         await _database.SortedSetRemoveRangeByScoreAsync(
             $"user:{ManualsWebApplicationFactory.TestUserId}:chats",
             double.NegativeInfinity,
             double.PositiveInfinity);
+
+        await _database.KeyDeleteAsync($"manuals:hc:chats:{ManualsWebApplicationFactory.TestUserId}");
     }
 
     // ---------------------------------------------------------------------------------

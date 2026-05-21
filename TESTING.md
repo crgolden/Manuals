@@ -4,6 +4,8 @@ The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests**
 
 For the `.NET 10 SDK xUnit caveat` (why `dotnet test` doesn't work) and `ASPNETCORE_ENVIRONMENT` discipline, see the workspace-level [TESTING.md](../TESTING.md).
 
+Unit test coding standards (MockBehavior.Strict, argument verification, SetupSequence, no control-flow in tests, etc.) are in the workspace-level [Unit Test Standards](../TESTING.md#unit-test-standards).
+
 ## Test Tiers
 
 | Tier | Trait | Requires Azure? | Runs in CI |
@@ -44,7 +46,12 @@ cmd /c "Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait ""Category=Inte
 
 ### Data Isolation
 
-Integration tests write to real Redis using the key prefix `user:integration-user-id:chats` and clean up in `IAsyncDisposable.DisposeAsync` (deletes all `chat:{chatId:N}:meta` and `chat:{chatId:N}:messages` keys created during the test). Concurrent runs against the same Redis instance are not supported.
+Integration tests write to real Redis using the key prefix `user:integration-user-id:chats` and clean up in `IAsyncDisposable.DisposeAsync`. Cleanup covers both key namespaces:
+
+- **Primary store:** `chat:{chatId:N}:meta`, `chat:{chatId:N}:messages`, and the `user:integration-user-id:chats` sorted set.
+- **HybridCache L2:** `manuals:hc:messages:{chatId:N}` per chat, and `manuals:hc:chats:integration-user-id` for the list. These are serialized C# objects written by `IDistributedCache` and will serve stale data on the next test run if not deleted.
+
+Concurrent runs against the same Redis instance are not supported.
 
 `DisposeAsync` must use `TestUserId` — never a hardcoded email string. If `TestUserId` ever migrates, grep all of `Manuals.Tests/` before declaring complete (prior `email→sub` migration left stale cleanup code that leaked state across runs).
 

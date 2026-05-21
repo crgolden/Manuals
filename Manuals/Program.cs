@@ -131,6 +131,12 @@ try
     var database = muxer.GetDatabase();
     builder.Services.AddSingleton<IConnectionMultiplexer>(muxer);
     builder.Services.AddSingleton(database);
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.ConnectionMultiplexerFactory = () => Task.FromResult<IConnectionMultiplexer>(muxer);
+        options.InstanceName = "manuals:hc:";
+    });
+    builder.Services.AddHybridCache();
     builder.Services.AddSingleton(responsesClient);
     builder.Services.AddScoped<IChatsService, RedisChatsService>();
     builder.Services.AddControllers(options =>
