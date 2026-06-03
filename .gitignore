@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Claude Code
+.claude/
+
 # User-specific files
 *.rsuser
 *.suo
@@ -160,6 +163,7 @@ _TeamCity*
 # Coverlet is a free, cross platform Code Coverage Tool
 coverage*.json
 coverage*.xml
+!coverage.settings.xml
 coverage*.info
 
 # Visual Studio code coverage results
@@ -416,3 +420,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Claude Code
+.claude/

@@ -68,6 +68,7 @@ jobs:
           dotnet-version: '10.x'
 
       - name: Cache dotnet global tools
+        id: cache-dotnet-tools
         uses: actions/cache@v5
         with:
           path: ~/.dotnet/tools
@@ -75,6 +76,7 @@ jobs:
           restore-keys: ${{ runner.os }}-dotnet-tools-
 
       - name: Install dotnet-coverage
+        if: steps.cache-dotnet-tools.outputs.cache-hit != 'true'
         run: dotnet tool install --global dotnet-coverage
 
       - name: Begin Sonar analysis
@@ -89,8 +91,8 @@ jobs:
             /o:"$env:SONAR_ORGANIZATION" `
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.host.url="https://sonarcloud.io" `
-            /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml,coverage-e2e.xml" `
-            /d:sonar.javascript.lcov.reportPaths="experience.client/coverage/lcov.info" `
+            /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml,coverage-integration.xml" `
+            /d:sonar.exclusions="**/bin/**,**/obj/**" `
             /d:sonar.scanner.skipJreProvisioning=true
 
       - name: Build with dotnet
@@ -109,6 +111,26 @@ jobs:
           name: test-results
           path: Manuals.Tests/bin/Release/net10.0/TestResults/
 
+      - name: Run integration tests with coverage
+        if: github.event_name != 'pull_request'
+        id: integration
+        env:
+          ASPNETCORE_ENVIRONMENT: CI
+          OidcAuthority: ${{ vars.OIDC_AUTHORITY }}
+          RedisHost: ${{ vars.REDIS_HOST }}
+          RedisPort: ${{ vars.REDIS_PORT }}
+          RedisSsl: true
+          RedisPassword: ${{ secrets.REDIS_PASSWORD }}
+          OpenAIEndpoint: ${{ vars.OPENAI_ENDPOINT }}
+          OpenAIModel: ${{ vars.OPENAI_MODEL }}
+          OpenAIMaxOutputTokenCount: 512
+          OpenAIInstructions: ${{ vars.OPENAI_INSTRUCTIONS }}
+          OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          dotnet-coverage collect `
+            "dotnet test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
+            -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
+
       - name: dotnet publish
         run: >
           dotnet publish Manuals/Manuals.csproj
@@ -118,7 +140,7 @@ jobs:
           -o ${{ github.workspace  }}\publish
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: .net-app
           path: ${{ github.workspace }}\publish
@@ -158,4 +180,4 @@ jobs:
           app-name: 'crgolden-manuals'
           slot-name: 'Production'
           package: .
-          
+
