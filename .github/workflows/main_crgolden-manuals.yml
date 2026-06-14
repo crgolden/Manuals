@@ -91,18 +91,29 @@ jobs:
             /o:"$env:SONAR_ORGANIZATION" `
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.host.url="https://sonarcloud.io" `
-            /d:sonar.cs.vscoveragexml.reportsPaths="coverage.xml,coverage-integration.xml" `
+            /d:sonar.cs.opencover.reportsPaths="coverage.opencover.xml" `
+            /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" `
             /d:sonar.exclusions="**/bin/**,**/obj/**" `
             /d:sonar.scanner.skipJreProvisioning=true
 
       - name: Build with dotnet
         run: dotnet build --no-incremental --configuration Release
 
+      - name: Restore local tools
+        run: dotnet tool restore
+
       - name: Run unit tests with coverage
         run: |
-          dotnet-coverage collect `
-            "dotnet test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx" `
-            -f xml -o "coverage.xml" -s "coverage.settings.xml"
+          dotnet coverlet Manuals.Tests\bin\Release\net10.0 `
+            --target "dotnet" `
+            --targetargs "test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx" `
+            --format opencover --output "coverage.opencover.xml" `
+            --skipautoprops `
+            --exclude-by-attribute GeneratedCodeAttribute `
+            --exclude-by-file "**/obj/**" `
+            --exclude-by-file "**/Program.cs" `
+            --does-not-return-attribute DoesNotReturnAttribute `
+            --include "[Manuals]*"
 
       - name: Upload test results
         uses: actions/upload-artifact@v7

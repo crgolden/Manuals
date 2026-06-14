@@ -2,10 +2,12 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
-    <File Path="CLAUDE.md" />
+    <File Path="COVERAGE-TRUTH-TABLES.md" />
     <File Path="coverage.settings.xml" />
+    <File Path="dotnet-tools.json" />
     <File Path="global.json" />
     <File Path="README.md" />
+    <File Path="TESTING.md" />
   </Folder>
   <Project Path="Manuals.Tests/Manuals.Tests.csproj" />
   <Project Path="Manuals/Manuals.csproj" />

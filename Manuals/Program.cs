@@ -35,7 +35,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
     Uri oidcAuthority = builder.Configuration.GetRequired<Uri>("OidcAuthority"),
         openAIEndpoint = builder.Configuration.GetRequired<Uri>("OpenAIEndpoint");
-    var openAIClientOptions = new OpenAIClientOptions
+    var responsesClientOptions = new ResponsesClientOptions
     {
         Endpoint = new Uri($"{openAIEndpoint}openai/v1/")
     };
@@ -55,7 +55,7 @@ try
         var defaultAzureCredentialOptions = defaultAzureCredentialOptionsSection.Get<DefaultAzureCredentialOptions>() ?? throw new InvalidOperationException($"Invalid '{nameof(DefaultAzureCredentialOptions)}' section.");
         var tokenCredential = new DefaultAzureCredential(defaultAzureCredentialOptions);
         var bearerTokenPolicy = new BearerTokenPolicy(tokenCredential, "https://cognitiveservices.azure.com/.default");
-        responsesClient = new ResponsesClient(bearerTokenPolicy, openAIClientOptions);
+        responsesClient = new ResponsesClient(bearerTokenPolicy, responsesClientOptions);
         Uri blobUri = builder.Configuration.GetRequired<Uri>("BlobUri"),
             dataProtectionKeyIdentifier = builder.Configuration.GetRequired<Uri>("DataProtectionKeyIdentifier"),
             elasticsearchNode = builder.Configuration.GetRequired<Uri>("ElasticsearchNode"),
@@ -96,7 +96,9 @@ try
                     ["deployment.environment"] = builder.Environment.EnvironmentName.ToLowerInvariant()
                 }))
             .WithMetrics(meterProviderBuilder => meterProviderBuilder
-                .AddRuntimeInstrumentation())
+                .AddRuntimeInstrumentation()
+                .AddView(instrument =>
+                    instrument.Meter.Name == "System.Net.Http" ? MetricStreamConfiguration.Drop : null))
             .WithTracing(tracerProviderBuilder => tracerProviderBuilder
                 .SetSampler(new AlwaysOnSampler())
                 .AddSource(nameof(Manuals))
@@ -118,7 +120,7 @@ try
         var secrets = builder.Configuration.GetManualsSecrets();
         configurationOptions.Password = secrets.RedisPassword;
         var apiKeyCredential = new ApiKeyCredential(secrets.OpenAIApiKey);
-        responsesClient = new ResponsesClient(apiKeyCredential, openAIClientOptions);
+        responsesClient = new ResponsesClient(apiKeyCredential, responsesClientOptions);
         builder.Services
             .AddSerilog((serviceProvider, loggerConfiguration) => loggerConfiguration
                 .ReadFrom.Configuration(builder.Configuration)

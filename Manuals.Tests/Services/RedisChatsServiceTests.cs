@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Models;
 using Moq;
+using OpenAI.Responses;
 using StackExchange.Redis;
 
 [Trait("Category", "Unit")]
@@ -20,11 +21,12 @@ public sealed class RedisChatsServiceTests
     private static readonly string ChatsKey = $"user:{TestEmail}:chats";
 
     private readonly Mock<IDatabase> _databaseMock = new(MockBehavior.Strict);
+    private readonly IConfiguration _configuration;
     private readonly RedisChatsService _service;
 
     public RedisChatsServiceTests()
     {
-        var configuration = new ConfigurationBuilder()
+        _configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["OpenAIModel"] = "gpt-4",
@@ -33,12 +35,7 @@ public sealed class RedisChatsServiceTests
             })
             .Build();
 
-        var services = new ServiceCollection();
-        services.AddHybridCache();
-        var provider = services.BuildServiceProvider();
-        var hybridCache = provider.GetRequiredService<HybridCache>();
-
-        _service = new RedisChatsService(null!, _databaseMock.Object, hybridCache, configuration);
+        _service = CreateService(Mock.Of<ResponsesClient>());
     }
 
     public static TheoryData<Func<RedisChatsService, CancellationToken, Task>> OwnershipRequiredOperations() => new()
@@ -258,6 +255,94 @@ public sealed class RedisChatsServiceTests
     }
 
     [Fact]
+    public async Task CompleteChatAsync_WhenChatNotOwned_ThrowsKeyNotFoundException()
+    {
+        // Arrange — non-blank input passes the guard, then VerifyOwnership throws before any OpenAI call
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync((double?)null);
+
+        // Act / Assert
+        await Assert.ThrowsAsync<KeyNotFoundException>(
+            () => _service.CompleteChatAsync(TestEmail, TestChatId, "hello", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GetChatAsync_WhenTitleEmptyAndCreatedAtUnparseable_ReturnsNullTitleAndZero()
+    {
+        // Arrange
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        _databaseMock
+            .Setup(d => d.HashGetAllAsync($"chat:{TestChatId:N}:meta", CommandFlags.None))
+            .ReturnsAsync([new HashEntry("title", string.Empty), new HashEntry("createdAt", "not-a-number")]);
+
+        // Act
+        var result = await _service.GetChatAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(result.Title);
+        Assert.Equal(0L, result.CreatedAt);
+    }
+
+    [Fact]
+    public async Task GetChatMessagesAsync_WhenItemDeserializesToNull_SkipsItem()
+    {
+        // Arrange — a literal "null" JSON element deserializes to null and must be skipped
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        var valid = JsonSerializer.Serialize(new ChatHistoryMessage("user", "Hello"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([(RedisValue)valid, (RedisValue)"null"]);
+
+        // Act
+        var result = await _service.GetChatMessagesAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal("Hello", result[0].Text);
+    }
+
+    [Fact]
+    public void StreamChatAsync_WhenInputProvided_ReturnsEnumerator()
+    {
+        // Act — a non-blank input returns the lazy streaming enumerator without invoking OpenAI
+        var stream = _service.StreamChatAsync(TestEmail, TestChatId, "hello", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.NotNull(stream);
+    }
+
+    [Fact]
+    public async Task CompleteChatAsync_WithHistory_BuildsInputItemsBeforeCallingOpenAi()
+    {
+        // Arrange — a user+assistant history exercises BuildInputItems' role branches; the OpenAI call then
+        // faults, which is enough to confirm the input items were assembled and the call was reached
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var userMsg = JsonSerializer.Serialize(new ChatHistoryMessage("user", "Question"), jsonOptions);
+        var assistantMsg = JsonSerializer.Serialize(new ChatHistoryMessage("assistant", "Answer"), jsonOptions);
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([(RedisValue)userMsg, (RedisValue)assistantMsg]);
+        var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
+        openAi
+            .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("OpenAI unavailable"));
+        var service = CreateService(openAi.Object);
+
+        // Act / Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CompleteChatAsync(TestEmail, TestChatId, "follow-up", TestContext.Current.CancellationToken));
+        openAi.Verify(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task CreateChatAsync_AddsToChatsSortedSetAndHashMeta()
     {
         _databaseMock
@@ -274,5 +359,13 @@ public sealed class RedisChatsServiceTests
         Assert.True(chat.CreatedAt > 0);
         _databaseMock.Verify(d => d.HashSetAsync(It.Is<RedisKey>(k => k.ToString().StartsWith("chat:") && k.ToString().EndsWith(":meta")), It.IsAny<HashEntry[]>(), CommandFlags.None), Times.Once);
         _databaseMock.Verify(d => d.SortedSetAddAsync(ChatsKey, It.IsAny<RedisValue>(), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None), Times.Once);
+    }
+
+    private RedisChatsService CreateService(ResponsesClient responsesClient)
+    {
+        var services = new ServiceCollection();
+        services.AddHybridCache();
+        var hybridCache = services.BuildServiceProvider().GetRequiredService<HybridCache>();
+        return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration);
     }
 }
