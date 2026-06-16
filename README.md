@@ -13,7 +13,7 @@ Manuals is a **resource server** in a five-app system. All endpoints require a J
 | Repo | Role | How Manuals interacts |
 |---|---|---|
 | [Identity](https://github.com/crgolden/Identity) | OIDC Identity Provider | Issues the access tokens Manuals validates (scope `manuals`) |
-| [Experience](https://github.com/crgolden/Experience) | Angular SPA + ASP.NET Core BFF | Sole client today — the BFF proxies `/manuals/api/**` with an access token |
+| [Inventory](https://github.com/crgolden/Inventory) | Angular SPA + ASP.NET Core BFF | Sole client today — the BFF proxies `/manuals/api/**` with an access token |
 | [Products](https://github.com/crgolden/Products) | OData v4 product catalog API | The `Product.ManualUrl` field is populated by the embedded chat panel that drives Manuals |
 | [Infrastructure](https://github.com/crgolden/Infrastructure) | Health monitoring dashboard | Polls Manuals' `/health` endpoint |
 
@@ -27,7 +27,7 @@ Client
   └── POST /chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
 ```
 
-**Client authentication:** all endpoints require a JWT Bearer token with the `manuals` scope (issued by Identity, forwarded by the Experience BFF).
+**Client authentication:** all endpoints require a JWT Bearer token with the `manuals` scope (issued by Identity, forwarded by the Inventory BFF).
 
 **Azure OpenAI authentication:** `DefaultAzureCredential` (Managed Identity) in production. `ApiKeyCredential` (`OpenAIApiKey` User Secret) in non-production — no `az login` needed locally.
 
