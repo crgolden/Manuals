@@ -44,4 +44,8 @@
   	<None Include="..\.editorconfig" Link=".editorconfig" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Manuals.Tests" />
+  </ItemGroup>
+
 </Project>

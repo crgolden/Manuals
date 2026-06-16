@@ -2,7 +2,6 @@ namespace Manuals.Tests.Controllers;
 
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
-using System.Text.Json;
 using Manuals.Controllers;
 using Manuals.Services;
 using Microsoft.AspNetCore.Http;

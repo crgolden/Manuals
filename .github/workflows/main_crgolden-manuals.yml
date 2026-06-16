@@ -94,6 +94,7 @@ jobs:
             /d:sonar.cs.opencover.reportsPaths="coverage.opencover.xml" `
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" `
             /d:sonar.exclusions="**/bin/**,**/obj/**" `
+            /d:sonar.coverage.exclusions="**/Program.cs" `
             /d:sonar.scanner.skipJreProvisioning=true
 
       - name: Build with dotnet

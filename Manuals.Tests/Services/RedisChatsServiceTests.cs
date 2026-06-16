@@ -1,5 +1,7 @@
 namespace Manuals.Tests.Services;
 
+using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Text.Json;
 using Manuals.Services;
 using Microsoft.Extensions.Caching.Hybrid;
@@ -361,11 +363,225 @@ public sealed class RedisChatsServiceTests
         _databaseMock.Verify(d => d.SortedSetAddAsync(ChatsKey, It.IsAny<RedisValue>(), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None), Times.Once);
     }
 
+    [Fact]
+    public async Task CompleteChatAsync_WhenOpenAiReturnsOutput_StoresMessagesSetsTitleAndReturnsText()
+    {
+        // Arrange — no prior history, OpenAI returns a real ResponseResult built from wire JSON
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([]);
+        _databaseMock
+            .Setup(d => d.ListRightPushAsync($"chat:{TestChatId:N}:messages", It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None))
+            .ReturnsAsync(2L);
+        _databaseMock
+            .Setup(d => d.SortedSetAddAsync(ChatsKey, TestChatId.ToString("N"), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
+            .ReturnsAsync(true);
+
+        // Auto-title path: existing title is blank, so SetAutoTitleIfNeededAsync writes one
+        _databaseMock
+            .Setup(d => d.HashGetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", CommandFlags.None))
+            .ReturnsAsync(RedisValue.Null);
+        _databaseMock
+            .Setup(d => d.HashSetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", It.IsAny<RedisValue>(), It.IsAny<When>(), CommandFlags.None))
+            .ReturnsAsync(true);
+
+        var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
+        openAi
+            .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientResult.FromValue(BuildResponse("Found the manual."), Mock.Of<PipelineResponse>()));
+        var service = CreateService(openAi.Object);
+
+        // Act
+        var (resultChatId, outputText) = await service.CompleteChatAsync(
+            TestEmail, TestChatId, "where is the manual?", TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(TestChatId, resultChatId);
+        Assert.Equal("Found the manual.", outputText);
+        _databaseMock.Verify(
+            d => d.ListRightPushAsync($"chat:{TestChatId:N}:messages", It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
+            Times.Once);
+        _databaseMock.Verify(
+            d => d.HashSetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", (RedisValue)"where is the manual?", It.IsAny<When>(), CommandFlags.None),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CompleteChatAsync_WhenOpenAiReturnsNoOutput_ThrowsInvalidOperationException()
+    {
+        // Arrange — owned chat, no history, OpenAI returns a response with no message output (GetOutputText null)
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([]);
+
+        var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
+        openAi
+            .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ClientResult.FromValue(BuildEmptyResponse(), Mock.Of<PipelineResponse>()));
+        var service = CreateService(openAi.Object);
+
+        // Act / Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CompleteChatAsync(TestEmail, TestChatId, "where is the manual?", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task StreamChatAsync_WhenOpenAiStreamsDeltas_YieldsDeltasAndPersistsOnCompletion()
+    {
+        // Arrange — owned chat, no history; the streamed deltas accumulate to "Hello world"
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([]);
+        _databaseMock
+            .Setup(d => d.ListRightPushAsync($"chat:{TestChatId:N}:messages", It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None))
+            .ReturnsAsync(2L);
+        _databaseMock
+            .Setup(d => d.SortedSetAddAsync(ChatsKey, TestChatId.ToString("N"), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
+            .ReturnsAsync(true);
+        _databaseMock
+            .Setup(d => d.HashGetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", CommandFlags.None))
+            .ReturnsAsync(RedisValue.Null);
+        _databaseMock
+            .Setup(d => d.HashSetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", It.IsAny<RedisValue>(), It.IsAny<When>(), CommandFlags.None))
+            .ReturnsAsync(true);
+
+        var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
+        openAi
+            .Setup(c => c.CreateResponseStreamingAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(new FakeStreamingResult(
+                new StreamingResponseOutputTextDeltaUpdate { Delta = "Hello " },
+                new StreamingResponseOutputTextDeltaUpdate { Delta = "world" }));
+        var service = CreateService(openAi.Object);
+
+        // Act
+        var deltas = new List<string>();
+        await foreach (var delta in service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken))
+        {
+            deltas.Add(delta);
+        }
+
+        // Assert
+        Assert.Equal(["Hello ", "world"], deltas);
+        _databaseMock.Verify(
+            d => d.ListRightPushAsync($"chat:{TestChatId:N}:messages", It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
+            Times.Once);
+        _databaseMock.Verify(
+            d => d.HashSetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", (RedisValue)"hi", It.IsAny<When>(), CommandFlags.None),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task StreamChatAsync_WhenStreamIsEmpty_PersistsNothing()
+    {
+        // Arrange — owned chat, no history, and a stream that yields no deltas
+        _databaseMock
+            .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
+            .ReturnsAsync(1.0);
+        _databaseMock
+            .Setup(d => d.ListRangeAsync($"chat:{TestChatId:N}:messages", 0, -1, CommandFlags.None))
+            .ReturnsAsync([]);
+
+        var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
+        openAi
+            .Setup(c => c.CreateResponseStreamingAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(new FakeStreamingResult());
+        var service = CreateService(openAi.Object);
+
+        // Act
+        var deltas = new List<string>();
+        await foreach (var delta in service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken))
+        {
+            deltas.Add(delta);
+        }
+
+        // Assert — accumulated text is empty, so no persistence occurs
+        Assert.Empty(deltas);
+        _databaseMock.Verify(
+            d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
+            Times.Never);
+    }
+
+    private static ResponseResult BuildEmptyResponse()
+    {
+        const string json = """
+        {
+          "id": "resp_test",
+          "object": "response",
+          "created_at": 1700000000,
+          "status": "completed",
+          "model": "gpt-4",
+          "parallel_tool_calls": false,
+          "output": []
+        }
+        """;
+        return ModelReaderWriter.Read<ResponseResult>(BinaryData.FromString(json))
+            ?? throw new InvalidOperationException("Failed to build ResponseResult.");
+    }
+
+    private static ResponseResult BuildResponse(string outputText)
+    {
+        var json = $$"""
+        {
+          "id": "resp_test",
+          "object": "response",
+          "created_at": 1700000000,
+          "status": "completed",
+          "model": "gpt-4",
+          "parallel_tool_calls": false,
+          "output": [
+            {
+              "type": "message",
+              "id": "msg_1",
+              "status": "completed",
+              "role": "assistant",
+              "content": [ { "type": "output_text", "text": {{JsonSerializer.Serialize(outputText)}}, "annotations": [] } ]
+            }
+          ]
+        }
+        """;
+        return ModelReaderWriter.Read<ResponseResult>(BinaryData.FromString(json))
+            ?? throw new InvalidOperationException("Failed to build ResponseResult.");
+    }
+
     private RedisChatsService CreateService(ResponsesClient responsesClient)
     {
         var services = new ServiceCollection();
         services.AddHybridCache();
         var hybridCache = services.BuildServiceProvider().GetRequiredService<HybridCache>();
         return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration);
+    }
+
+    // Minimal AsyncCollectionResult that yields a fixed sequence of streaming updates, mirroring the
+    // AsyncSseUpdateCollection the real client returns (ResponsesClient.cs line 266) without a live SSE stream.
+    private sealed class FakeStreamingResult(params StreamingResponseUpdate[] updates)
+        : AsyncCollectionResult<StreamingResponseUpdate>
+    {
+        private readonly StreamingResponseUpdate[] _updates = updates;
+
+        public override ContinuationToken? GetContinuationToken(ClientResult page) => null;
+
+        public override async IAsyncEnumerable<ClientResult> GetRawPagesAsync()
+        {
+            await Task.Yield();
+            yield return ClientResult.FromValue(new object(), Mock.Of<PipelineResponse>());
+        }
+
+        protected override async IAsyncEnumerable<StreamingResponseUpdate> GetValuesFromPageAsync(ClientResult page)
+        {
+            foreach (var update in _updates)
+            {
+                await Task.Yield();
+                yield return update;
+            }
+        }
     }
 }
