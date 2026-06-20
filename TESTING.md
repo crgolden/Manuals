@@ -63,9 +63,24 @@ A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFact
 
 ## Local SonarCloud analysis
 
-Generate coverage first (unit + integration), then run from `Manuals/`:
+Generate coverage first, then run from `Manuals/`. Unit coverage is OpenCover (branch-bearing, via
+`coverlet.console` pinned in `dotnet-tools.json` — restore with `dotnet tool restore`; see the workspace
+`TESTING.md` for the command rationale); integration coverage stays VS Coverage XML. SonarCloud unions both.
 
 ```powershell
+# Unit (OpenCover, carries branch/condition coverage)
+dotnet build Manuals.Tests --configuration Release
+dotnet tool restore
+dotnet coverlet Manuals.Tests\bin\Release\net10.0 `
+  --target "dotnet" `
+  --targetargs "test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Unit" `
+  --format opencover --output "coverage.opencover.xml" `
+  --skipautoprops --exclude-by-attribute GeneratedCodeAttribute `
+  --exclude-by-file "**/obj/**" --exclude-by-file "**/Program.cs" `
+  --does-not-return-attribute DoesNotReturnAttribute --include "[Manuals]*"
+
+# Integration (VS Coverage XML, line-only) — see CI for the dotnet-coverage collect command → coverage-integration.xml
+
 $env:SONAR_TOKEN = "<token>"
 & "$env:SystemDrive\sonar-scanner-8.0.1.6346-windows-x64\bin\sonar-scanner.bat" `
   "-Dsonar.projectKey=crgolden_Manuals" `
@@ -73,7 +88,12 @@ $env:SONAR_TOKEN = "<token>"
   "-Dsonar.sources=Manuals" `
   "-Dsonar.tests=Manuals.Tests" `
   "-Dsonar.exclusions=**/bin/**,**/obj/**" `
-  "-Dsonar.cs.vscoveragexml.reportsPaths=coverage.xml,coverage-integration.xml"
+  "-Dsonar.cs.opencover.reportsPaths=coverage.opencover.xml" `
+  "-Dsonar.cs.vscoveragexml.reportsPaths=coverage-integration.xml"
 ```
 
-Required coverage files: `coverage.xml`, `coverage-integration.xml`.
+Required coverage files: `coverage.opencover.xml` (unit, OpenCover), `coverage-integration.xml` (integration, VS Coverage).
+
+### When to build a truth table
+
+The coverage **score is read from SonarCloud, never hand-maintained** here. Build a per-method table in `COVERAGE-TRUTH-TABLES.md` only when SonarCloud flags a method with **cognitive complexity > 15 AND uncovered conditions > 0**: the table is escalation for the gnarly few, not a per-class deliverable. See `../DESIGN-LANGUAGE.md` and `../TESTING-COVERAGE.md`.

@@ -4,8 +4,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Manuals.Models;
-using Manuals.Tests.Infrastructure;
+using Models;
+using Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 

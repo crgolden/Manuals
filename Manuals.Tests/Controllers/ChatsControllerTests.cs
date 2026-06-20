@@ -2,7 +2,6 @@ namespace Manuals.Tests.Controllers;
 
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
-using System.Text.Json;
 using Manuals.Controllers;
 using Manuals.Services;
 using Microsoft.AspNetCore.Http;
@@ -345,6 +344,33 @@ public sealed class ChatsControllerTests
         Assert.EndsWith("data: [DONE]\n\n", body);
     }
 
+    [Fact]
+    public async Task PostMessageStreamAsync_WhenServiceThrowsKeyNotFoundException_Returns404()
+    {
+        var responseBody = new MemoryStream();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = responseBody;
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        _chatsServiceMock
+            .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, "Hello", It.IsAny<CancellationToken>()))
+            .Returns(new KeyNotFoundAsyncEnumerable());
+
+        await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest("Hello"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(StatusCodes.Status404NotFound, _controller.HttpContext.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetChatsAsync_WhenSubClaimMissing_ThrowsInvalidOperationException()
+    {
+        _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _controller.GetChatsAsync(TestContext.Current.CancellationToken));
+    }
+
     private static async IAsyncEnumerable<string> SingleDelta(string value, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await Task.Yield();
@@ -357,5 +383,20 @@ public sealed class ChatsControllerTests
         var identity = new ClaimsIdentity([new Claim("sub", userId)]);
         var user = new ClaimsPrincipal(identity);
         return new ControllerContext { HttpContext = new DefaultHttpContext { User = user } };
+    }
+
+    private sealed class KeyNotFoundAsyncEnumerable : IAsyncEnumerable<string>
+    {
+        public IAsyncEnumerator<string> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
+            new Enumerator();
+
+        private sealed class Enumerator : IAsyncEnumerator<string>
+        {
+            public string Current { get; } = string.Empty;
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+            public ValueTask<bool> MoveNextAsync() => throw new KeyNotFoundException();
+        }
     }
 }
