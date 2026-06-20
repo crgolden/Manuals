@@ -97,11 +97,13 @@ try
             .WithMetrics(meterProviderBuilder => meterProviderBuilder
                 .AddRuntimeInstrumentation()
                 .AddView(instrument =>
-                    instrument.Meter.Name == "System.Net.Http" ? MetricStreamConfiguration.Drop : null))
+                    instrument.Meter.Name == "System.Net.Http" ? MetricStreamConfiguration.Drop : null)
+                .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration.GetRequired<string>("AlloyEndpoint"))))
             .WithTracing(tracerProviderBuilder => tracerProviderBuilder
                 .SetSampler(new AlwaysOnSampler())
                 .AddSource(nameof(Manuals))
-                .AddRedisInstrumentation())
+                .AddRedisInstrumentation()
+                .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration.GetRequired<string>("AlloyEndpoint"))))
             .UseAzureMonitor().Services
             .AddDataProtection()
             .SetApplicationName(applicationName)
