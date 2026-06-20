@@ -85,21 +85,21 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
 
         var first = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("My name is AliceIntegrationTestUser."),
+            new ChatRequest("I need the manual for the Samsung QN90B TV."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
         // Act: ask a follow-up that only makes sense if history is sent.
         var second = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("What is my name? Reply with only the name."),
+            new ChatRequest("What product did I just say I need a manual for? Reply with only the product name."),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         var result = await second.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result?.Output);
-        Assert.Contains("Alice", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("QN90B", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     public async ValueTask DisposeAsync()
