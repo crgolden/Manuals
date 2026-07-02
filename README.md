@@ -31,6 +31,18 @@ Client
 
 **Azure OpenAI authentication:** `DefaultAzureCredential` (Managed Identity) in production. `ApiKeyCredential` (`OpenAIApiKey` User Secret) in non-production — no `az login` needed locally.
 
+## Persistence (Redis & HybridCache)
+
+Redis is the primary store; keys never expire:
+
+| Key | Type | Contents |
+|---|---|---|
+| `user:{sub}:chats` | Sorted set | The user's chat IDs, scored by creation time (Unix ms) so the newest sorts first |
+| `chat:{id}:meta` | Hash | `title`, `createdAt` |
+| `chat:{id}:messages` | List | One JSON entry per turn: `{"role":"...","text":"..."}` |
+
+The two hot read paths (a chat's message history and a user's chat list) are wrapped in [HybridCache](https://learn.microsoft.com/aspnet/core/performance/caching/hybrid) via `GetOrCreateAsync`. L1 is in-process; L2 is `IDistributedCache` backed by the same Redis, under the `manuals:hc:` key prefix (distinct from the primary `user:*` / `chat:*` keys, so the two namespaces never collide). TTLs are L1/L2 5m/30m for messages and 1m/5m for the chat list. Every write invalidates the affected entry with `RemoveAsync`, so reads never serve stale data after a mutation.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -48,8 +60,7 @@ Client
 | Tool | Notes |
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
-| Azure OpenAI resource | Deployed model (accessible via API key in non-production) |
-| Azure OpenAI resource | Deployed model (e.g., `gpt-4o`) |
+| Azure OpenAI resource | Deployed model (e.g. `gpt-4o-mini`); accessible via API key in non-production |
 | Redis instance | Azure Cache for Redis or local |
 
 ## Getting Started
@@ -60,7 +71,7 @@ Client
 dotnet user-secrets set "OidcAuthority" "https://localhost:7261" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIEndpoint" "https://<your-resource>.openai.azure.com/" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIApiKey" "<your-api-key>" --project Manuals/Manuals.csproj
-dotnet user-secrets set "OpenAIModel" "gpt-4o" --project Manuals/Manuals.csproj
+dotnet user-secrets set "OpenAIModel" "gpt-4o-mini" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIInstructions" "You are a helpful assistant." --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIMaxOutputTokenCount" "4096" --project Manuals/Manuals.csproj
 dotnet user-secrets set "RedisHost" "<your-redis-host>" --project Manuals/Manuals.csproj
@@ -68,6 +79,8 @@ dotnet user-secrets set "RedisPort" "6380" --project Manuals/Manuals.csproj
 dotnet user-secrets set "RedisSsl" "true" --project Manuals/Manuals.csproj
 dotnet user-secrets set "RedisPassword" "<your-redis-password>" --project Manuals/Manuals.csproj
 ```
+
+> The values above are examples. The effective `OpenAIModel` and `OpenAIMaxOutputTokenCount` are environment-specific — they differ between local development, the CI integration-test run, and production (sourced from Azure App Service settings and Key Vault).
 
 ### 2. Run
 
@@ -140,7 +153,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 |---|---|
 | `OidcAuthority` | Identity server URL |
 | `OpenAIEndpoint` | `https://<your-resource>.openai.azure.com/` |
-| `OpenAIModel` | Deployed model name (e.g. `gpt-4o`) |
+| `OpenAIModel` | Deployed model name (e.g. `gpt-4o-mini`) |
 | `OpenAIInstructions` | System prompt |
 | `OpenAIMaxOutputTokenCount` | Max tokens per completion |
 | `RedisHost` | `<your-redis>.redis.cache.windows.net` |

@@ -155,8 +155,7 @@ public sealed class RedisChatsService : IChatsService
         var options = new CreateResponseOptions(_model, inputItems)
         {
             MaxOutputTokenCount = _maxOutputTokenCount,
-            Instructions = _instructions,
-            Tools = { ResponseTool.CreateWebSearchTool() }
+            Instructions = _instructions
         };
 
         using var activity = Telemetry.StartActivity("manuals.openai.complete_chat");
@@ -229,8 +228,7 @@ public sealed class RedisChatsService : IChatsService
         {
             MaxOutputTokenCount = _maxOutputTokenCount,
             Instructions = _instructions,
-            StreamingEnabled = true,
-            Tools = { ResponseTool.CreateWebSearchTool() }
+            StreamingEnabled = true
         };
 
         using var activity = Telemetry.StartActivity("manuals.openai.stream_chat");
