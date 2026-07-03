@@ -51,7 +51,7 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 | AI | Azure OpenAI Responses API (`OpenAI.Responses`) |
 | Persistence | Azure Cache for Redis |
 | Auth | JWT Bearer (`manuals` scope) |
-| Observability | Azure Monitor, OpenTelemetry, Serilog, Elasticsearch |
+| Observability | OpenTelemetry → Grafana Alloy (OTLP), Serilog → Elasticsearch |
 | Hosting | Azure App Service (Windows, .NET 10, F1 plan) |
 | Cloud Identity | `DefaultAzureCredential` (Managed Identity in production) |
 
@@ -163,7 +163,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 | `BlobUri` | Azure Blob Storage URL (Data Protection keys) |
 | `DataProtectionKeyIdentifier` | Key Vault key URI |
 | `ElasticsearchNode` | Elasticsearch endpoint |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Azure Monitor connection string |
+| `AlloyEndpoint` | Grafana Alloy OTLP/gRPC endpoint |
 | `DefaultAzureCredentialOptions__ExcludeManagedIdentityCredential` | `false` |
 
 Secrets (`RedisPassword`, `ElasticsearchUsername`, `ElasticsearchPassword`) are fetched from Azure Key Vault at startup via Managed Identity — do not set them as Application Settings.
