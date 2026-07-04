@@ -60,7 +60,7 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 | Tool | Notes |
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
-| Azure OpenAI resource | Deployed model (e.g. `gpt-4o-mini`); accessible via API key in non-production |
+| Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production |
 | Redis instance | Azure Cache for Redis or local |
 
 ## Getting Started
@@ -153,7 +153,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 |---|---|
 | `OidcAuthority` | Identity server URL |
 | `OpenAIEndpoint` | `https://<your-resource>.openai.azure.com/` |
-| `OpenAIModel` | Deployed model name (e.g. `gpt-4o-mini`) |
+| `OpenAIModel` | Deployed model name (e.g. `gpt-5-mini`) |
 | `OpenAIInstructions` | System prompt |
 | `OpenAIMaxOutputTokenCount` | Max tokens per completion |
 | `RedisHost` | `<your-redis>.redis.cache.windows.net` |
