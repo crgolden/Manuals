@@ -98,6 +98,8 @@ jobs:
             /d:sonar.scanner.skipJreProvisioning=true
 
       - name: Build with dotnet
+        env:
+          NuGetPackageSourceCredentials_GitHub: Username=${{ github.actor }};Password=${{ secrets.PACKAGES_READ_TOKEN }}
         run: dotnet build --no-incremental --configuration Release
 
       - name: Restore local tools
@@ -144,6 +146,8 @@ jobs:
             -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
 
       - name: dotnet publish
+        env:
+          NuGetPackageSourceCredentials_GitHub: Username=${{ github.actor }};Password=${{ secrets.PACKAGES_READ_TOKEN }}
         run: >
           dotnet publish Manuals/Manuals.csproj
           -c Release
