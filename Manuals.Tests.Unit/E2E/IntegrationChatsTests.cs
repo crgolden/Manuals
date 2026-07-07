@@ -1,4 +1,4 @@
-namespace Manuals.Tests.E2E;
+namespace Manuals.Tests.Unit.E2E;
 
 using System.Net;
 using System.Net.Http.Json;

@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Services;
+namespace Manuals.Tests.Unit.Services;
 
 using System.ClientModel;
 using System.ClientModel.Primitives;

@@ -18,8 +18,8 @@ Unit test coding standards (MockBehavior.Strict, argument verification, SetupSeq
 ### Unit Tests
 
 ```powershell
-dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Unit" -showLiveOutput
+dotnet build Manuals.Tests.Unit --configuration Debug
+.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
 ```
 
 ### Integration Tests
@@ -31,11 +31,11 @@ Requires a running Redis instance and an Azure OpenAI endpoint. No `az login` ne
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Integration" -showLiveOutput
+dotnet build Manuals.Tests.Unit --configuration Debug
+.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Integration" -showLiveOutput
 
 # Redirect output for in-flight inspection
-cmd /c "Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
+cmd /c "Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
 ```
 
 ## Test Infrastructure
@@ -53,7 +53,7 @@ Integration tests write to real Redis using the key prefix `user:integration-use
 
 Concurrent runs against the same Redis instance are not supported.
 
-`DisposeAsync` must use `TestUserId` — never a hardcoded email string. If `TestUserId` ever migrates, grep all of `Manuals.Tests/` before declaring complete (prior `email→sub` migration left stale cleanup code that leaked state across runs).
+`DisposeAsync` must use `TestUserId` — never a hardcoded email string. If `TestUserId` ever migrates, grep all of `Manuals.Tests.Unit/` before declaring complete (prior `email→sub` migration left stale cleanup code that leaked state across runs).
 
 ### `IntegrationCollection` / `IntegrationChatsTests`
 
@@ -69,11 +69,11 @@ Generate coverage first, then run from `Manuals/`. Unit coverage is OpenCover (b
 
 ```powershell
 # Unit (OpenCover, carries branch/condition coverage)
-dotnet build Manuals.Tests --configuration Release
+dotnet build Manuals.Tests.Unit --configuration Release
 dotnet tool restore
-dotnet coverlet Manuals.Tests\bin\Release\net10.0 `
+dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
   --target "dotnet" `
-  --targetargs "test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Unit" `
+  --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit" `
   --format opencover --output "coverage.opencover.xml" `
   --skipautoprops --exclude-by-attribute GeneratedCodeAttribute `
   --exclude-by-file "**/obj/**" --exclude-by-file "**/Program.cs" `
@@ -86,7 +86,7 @@ $env:SONAR_TOKEN = "<token>"
   "-Dsonar.projectKey=crgolden_Manuals" `
   "-Dsonar.organization=crgolden" `
   "-Dsonar.sources=Manuals" `
-  "-Dsonar.tests=Manuals.Tests" `
+  "-Dsonar.tests=Manuals.Tests.Unit" `
   "-Dsonar.exclusions=**/bin/**,**/obj/**" `
   "-Dsonar.cs.opencover.reportsPaths=coverage.opencover.xml" `
   "-Dsonar.cs.vscoveragexml.reportsPaths=coverage-integration.xml"

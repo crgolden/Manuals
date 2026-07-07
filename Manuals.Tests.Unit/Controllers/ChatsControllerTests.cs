@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Controllers;
+namespace Manuals.Tests.Unit.Controllers;
 
 using System.Runtime.CompilerServices;
 using System.Security.Claims;

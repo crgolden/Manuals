@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Infrastructure;
+namespace Manuals.Tests.Unit.Infrastructure;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;

@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Extensions;
+namespace Manuals.Tests.Unit.Extensions;
 
 using Manuals.Extensions;
 using Microsoft.Extensions.Configuration;

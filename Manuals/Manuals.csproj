@@ -49,7 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Manuals.Tests" />
+    <InternalsVisibleTo Include="Manuals.Tests.Unit" />
   </ItemGroup>
 
 </Project>

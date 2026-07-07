@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Infrastructure;
+namespace Manuals.Tests.Unit.Infrastructure;
 
 [CollectionDefinition(Name)]
 public sealed class IntegrationCollection : ICollectionFixture<ManualsWebApplicationFactory>

@@ -9,6 +9,6 @@
     <File Path="README.md" />
     <File Path="TESTING.md" />
   </Folder>
-  <Project Path="Manuals.Tests/Manuals.Tests.csproj" />
+  <Project Path="Manuals.Tests.Unit/Manuals.Tests.Unit.csproj" />
   <Project Path="Manuals/Manuals.csproj" />
 </Solution>

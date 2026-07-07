@@ -1,4 +1,4 @@
-namespace Manuals.Tests.Infrastructure;
+namespace Manuals.Tests.Unit.Infrastructure;
 
 using System.Security.Claims;
 using System.Text.Encodings.Web;

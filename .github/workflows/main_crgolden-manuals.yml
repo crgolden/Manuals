@@ -107,9 +107,9 @@ jobs:
 
       - name: Run unit tests with coverage
         run: |
-          dotnet coverlet Manuals.Tests\bin\Release\net10.0 `
+          dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
             --target "dotnet" `
-            --targetargs "test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx" `
+            --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx" `
             --format opencover --output "coverage.opencover.xml" `
             --skipautoprops `
             --exclude-by-attribute GeneratedCodeAttribute `
@@ -123,7 +123,7 @@ jobs:
         if: always()
         with:
           name: test-results
-          path: Manuals.Tests/bin/Release/net10.0/TestResults/
+          path: Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
 
       - name: Run integration tests with coverage
         if: github.event_name != 'pull_request'
@@ -142,7 +142,7 @@ jobs:
           OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
         run: |
           dotnet-coverage collect `
-            "dotnet test --project Manuals.Tests --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
+            "dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
             -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
 
       - name: dotnet publish

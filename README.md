@@ -111,7 +111,7 @@ On the first message sent to a chat, the title is auto-set to the first 60 chara
 
 ```
 Manuals/               # ASP.NET Core 10 API — chat CRUD, OpenAI streaming, Redis persistence
-Manuals.Tests/         # xUnit v3 — unit tests (Moq) and integration tests against real Azure Redis + OpenAI
+Manuals.Tests.Unit/         # xUnit v3 — unit tests (Moq) and integration tests against real Azure Redis + OpenAI
 ```
 
 ## Commands
@@ -121,12 +121,12 @@ Manuals.Tests/         # xUnit v3 — unit tests (Moq) and integration tests aga
 dotnet build
 
 # Unit tests only (no Azure required)
-dotnet build Manuals.Tests --configuration Debug
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Unit" -showLiveOutput
+dotnet build Manuals.Tests.Unit --configuration Debug
+.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
 
 # Integration tests (requires live Redis + Azure OpenAI endpoint; no az login needed)
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-.\Manuals.Tests\bin\Debug\net10.0\Manuals.Tests.exe -trait "Category=Integration" -showLiveOutput
+.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Integration" -showLiveOutput
 
 # Publish
 dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
