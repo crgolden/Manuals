@@ -78,7 +78,7 @@ try
                     [elasticsearchNode],
                     elasticsearchSinkOptions =>
                     {
-                        elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "dotnet", nameof(Manuals));
+                        elasticsearchSinkOptions.DataStream = new DataStreamName("logs", "app", nameof(Manuals));
                         elasticsearchSinkOptions.BootstrapMethod = BootstrapMethod.Failure;
                         elasticsearchSinkOptions.TextFormatting.MapCustom = (ecsDocument, _) =>
                         {
