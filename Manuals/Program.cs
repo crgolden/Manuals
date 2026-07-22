@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Security.Claims;
 using Azure.Identity;
-using Azure.Security.KeyVault.Secrets;
 using Elastic.Ingest.Elasticsearch;
 using Elastic.Ingest.Elasticsearch.DataStreams;
 using Elastic.Serilog.Sinks;
@@ -47,6 +46,7 @@ try
         Ssl = redisSsl,
         EndPoints = [redisEndpoint]
     };
+    configurationOptions.Password = builder.Configuration.GetRequired<string>("RedisPassword");
     if (builder.Environment.IsProduction())
     {
         var defaultAzureCredentialOptionsSection = builder.Configuration.GetRequiredSection(nameof(DefaultAzureCredentialOptions));
@@ -56,12 +56,8 @@ try
         responsesClient = new ResponsesClient(bearerTokenPolicy, responsesClientOptions);
         Uri blobUri = builder.Configuration.GetRequired<Uri>("BlobUri"),
             dataProtectionKeyIdentifier = builder.Configuration.GetRequired<Uri>("DataProtectionKeyIdentifier"),
-            elasticsearchNode = builder.Configuration.GetRequired<Uri>("ElasticsearchNode"),
-            keyVaultUrl = builder.Configuration.GetRequired<Uri>("KeyVaultUri");
+            elasticsearchNode = builder.Configuration.GetRequired<Uri>("ElasticsearchNode");
         var applicationName = builder.Configuration.GetRequired<string>("WEBSITE_SITE_NAME");
-        var secretClient = new SecretClient(keyVaultUrl, tokenCredential);
-        var secrets = secretClient.GetManualsSecrets();
-        configurationOptions.Password = secrets.RedisPassword.Value;
         builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
             options.Filter = context => !context.Request.Path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase));
         builder.Logging.AddOpenTelemetry(openTelemetryLoggerOptions =>
@@ -69,6 +65,8 @@ try
             openTelemetryLoggerOptions.IncludeFormattedMessage = true;
             openTelemetryLoggerOptions.IncludeScopes = true;
         });
+        var elasticsearchUsername = builder.Configuration.GetRequired<string>("ElasticsearchUsername");
+        var elasticsearchPassword = builder.Configuration.GetRequired<string>("ElasticsearchPassword");
         builder.Services
             .AddSerilog((serviceProvider, loggerConfiguration) => loggerConfiguration
                 .ReadFrom.Configuration(builder.Configuration)
@@ -89,7 +87,7 @@ try
                     },
                     transportConfiguration =>
                     {
-                        var header = new BasicAuthentication(secrets.ElasticsearchUsername.Value, secrets.ElasticsearchPassword.Value);
+                        var header = new BasicAuthentication(elasticsearchUsername, elasticsearchPassword);
                         transportConfiguration.Authentication(header);
                     }))
             .AddOpenTelemetry()
@@ -124,9 +122,8 @@ try
             builder.Configuration.AddUserSecrets("4b268de6-5012-41fa-b8f6-254b6d08b380");
         }
 
-        var secrets = builder.Configuration.GetManualsSecrets();
-        configurationOptions.Password = secrets.RedisPassword;
-        var apiKeyCredential = new ApiKeyCredential(secrets.OpenAIApiKey);
+        var openAIApiKey = builder.Configuration.GetRequired<string>("OpenAIApiKey");
+        var apiKeyCredential = new ApiKeyCredential(openAIApiKey);
         responsesClient = new ResponsesClient(apiKeyCredential, responsesClientOptions);
         builder.Services
             .AddSerilog((serviceProvider, loggerConfiguration) => loggerConfiguration

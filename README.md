@@ -159,11 +159,10 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 | `RedisHost` | `<your-redis>.redis.cache.windows.net` |
 | `RedisPort` | `6380` |
 | `RedisSsl` | `true` |
-| `KeyVaultUri` | Azure Key Vault URL |
 | `BlobUri` | Azure Blob Storage URL (Data Protection keys) |
 | `DataProtectionKeyIdentifier` | Key Vault key URI |
 | `ElasticsearchNode` | Elasticsearch endpoint |
 | `AlloyEndpoint` | Grafana Alloy OTLP/gRPC endpoint |
 | `DefaultAzureCredentialOptions__ExcludeManagedIdentityCredential` | `false` |
 
-Secrets (`RedisPassword`, `ElasticsearchUsername`, `ElasticsearchPassword`) are fetched from Azure Key Vault at startup via Managed Identity — do not set them as Application Settings.
+`RedisPassword`, `ElasticsearchUsername`, and `ElasticsearchPassword` **must** be set as Application Settings — each as a Key Vault reference (`@Microsoft.KeyVault(SecretUri=...)`), which the platform resolves into `IConfiguration` before the app starts. `Program.cs` reads them via `IConfiguration.GetRequired<string>`, no `SecretClient` call involved.
