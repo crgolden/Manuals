@@ -20,16 +20,13 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
         {
             if (!ctx.HostingEnvironment.IsEnvironment("Production"))
             {
-                // Replace Serilog (Elasticsearch sink) with a plain console logger.
                 services.RemoveAll<ILoggerFactory>();
                 services.AddLogging(lb => lb.AddConsole());
             }
 
-            // Replace JWT Bearer auth with a test scheme that always succeeds.
             services.AddAuthentication(TestScheme)
                 .AddScheme<AuthenticationSchemeOptions, IntegrationAuthHandler>(TestScheme, _ => { });
 
-            // Replace the Manuals authorization policy so it accepts the test scheme.
             services.AddAuthorizationBuilder()
                 .AddPolicy(nameof(Manuals), policy =>
                     policy.RequireAuthenticatedUser().RequireClaim("scope", "manuals"));

@@ -13,6 +13,8 @@ Unit test coding standards (MockBehavior.Strict, argument verification, SetupSeq
 | Unit | `Category=Unit` | No | Every push/PR |
 | Integration | `Category=Integration` | Yes — real Redis + Azure OpenAI (API key from User Secrets; no Azure credentials) | Push to `main` only |
 
+`ChatsControllerTests.PostChatAsync_ReturnsCreatedAtActionWithChat` (unit) verifies the shape of the returned `IActionResult` only — calling the action directly bypasses the full HTTP middleware pipeline, so it never exercises `CreatedAtActionResult`'s own route-URL generation. `IntegrationChatsTests`'s `CreateChatAsync` helper is the one place that does: it asserts the `Location` header against a live HTTP response through the real pipeline.
+
 ## Running Tests Locally
 
 ### Unit Tests

@@ -321,8 +321,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task CompleteChatAsync_WithHistory_BuildsInputItemsBeforeCallingOpenAi()
     {
-        // Arrange — a user+assistant history exercises BuildInputItems' role branches; the OpenAI call then
-        // faults, which is enough to confirm the input items were assembled and the call was reached
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -380,7 +379,6 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.SortedSetAddAsync(ChatsKey, TestChatId.ToString("N"), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
             .ReturnsAsync(true);
 
-        // Auto-title path: existing title is blank, so SetAutoTitleIfNeededAsync writes one
         _databaseMock
             .Setup(d => d.HashGetAsync($"chat:{TestChatId:N}:meta", (RedisValue)"title", CommandFlags.None))
             .ReturnsAsync(RedisValue.Null);
@@ -560,8 +558,6 @@ public sealed class RedisChatsServiceTests
         return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration);
     }
 
-    // Minimal AsyncCollectionResult that yields a fixed sequence of streaming updates, mirroring the
-    // AsyncSseUpdateCollection the real client returns (ResponsesClient.cs line 266) without a live SSE stream.
     private sealed class FakeStreamingResult(params StreamingResponseUpdate[] updates)
         : AsyncCollectionResult<StreamingResponseUpdate>
     {

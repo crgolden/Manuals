@@ -129,12 +129,6 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostChatAsync_ReturnsCreatedAtActionWithChat()
     {
-        // NOTE: This test verifies the shape of the IActionResult returned by the
-        // action method. It does NOT exercise CreatedAtActionResult.OnFormatting
-        // (route URL generation), because the action is called directly without the
-        // full HTTP middleware pipeline. Actual Location header generation is covered
-        // by the nightly CreateChatAsync helper, which asserts the header on a live
-        // HTTP response through the real pipeline.
         _controller.ControllerContext = CreateContextWithUser();
         var chat = new Chat(TestChatId, null, 1_700_000_000L);
         _chatsServiceMock

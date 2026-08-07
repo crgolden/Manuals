@@ -4,9 +4,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Models;
 using Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Models;
 using StackExchange.Redis;
 
 [Collection(IntegrationCollection.Name)]
@@ -30,9 +30,6 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
-        // Act: send a domain-appropriate question so the system prompt does not reject it.
-        // This test verifies the end-to-end completion pipeline (HTTP → OpenAI → Redis → HTTP),
-        // not the specific wording of the model's answer.
         var response = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
             new ChatRequest("Can you help me find the manual for an LG OLED TV?"),
@@ -104,12 +101,10 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        // Clean up test data from real Redis.
         foreach (var chatId in _createdChatIds)
         {
             await _database.KeyDeleteAsync([$"chat:{chatId:N}:meta", $"chat:{chatId:N}:messages"]);
 
-            // HybridCache L2 keys (serialized C# objects under the manuals:hc: prefix).
             await _database.KeyDeleteAsync($"manuals:hc:messages:{chatId:N}");
         }
 
@@ -121,9 +116,6 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         await _database.KeyDeleteAsync($"manuals:hc:chats:{ManualsWebApplicationFactory.TestUserId}");
     }
 
-    // ---------------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------------
     private async Task<Chat> CreateChatAsync()
     {
         var response = await _client.PostAsync(
@@ -132,10 +124,6 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        // Verify the Location header is present and resolves to the GET endpoint.
-        // This is the only test tier that exercises CreatedAtActionResult.OnFormatting
-        // through the real HTTP pipeline; the controller unit tests call the action
-        // method directly and never trigger route URL generation.
         var location = response.Headers.Location;
         Assert.NotNull(location);
 

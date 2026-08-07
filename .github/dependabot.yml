@@ -4,3 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      patch-and-minor:
+        update-types:
+          - "minor"
+          - "patch"
