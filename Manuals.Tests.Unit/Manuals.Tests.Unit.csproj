@@ -8,6 +8,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <OutputType>Exe</OutputType>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NoWarn>OPENAI001</NoWarn>
   </PropertyGroup>
 
