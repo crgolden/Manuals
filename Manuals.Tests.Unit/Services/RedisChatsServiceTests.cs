@@ -259,7 +259,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task CompleteChatAsync_WhenChatNotOwned_ThrowsKeyNotFoundException()
     {
-        // Arrange — non-blank input passes the guard, then VerifyOwnership throws before any OpenAI call
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync((double?)null);
@@ -291,7 +291,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task GetChatMessagesAsync_WhenItemDeserializesToNull_SkipsItem()
     {
-        // Arrange — a literal "null" JSON element deserializes to null and must be skipped
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -311,7 +311,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public void StreamChatAsync_WhenInputProvided_ReturnsEnumerator()
     {
-        // Act — a non-blank input returns the lazy streaming enumerator without invoking OpenAI
+        // Act
         var stream = _service.StreamChatAsync(TestEmail, TestChatId, "hello", TestContext.Current.CancellationToken);
 
         // Assert
@@ -365,7 +365,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task CompleteChatAsync_WhenOpenAiReturnsOutput_StoresMessagesSetsTitleAndReturnsText()
     {
-        // Arrange — no prior history, OpenAI returns a real ResponseResult built from wire JSON
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -410,7 +410,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task CompleteChatAsync_WhenOpenAiReturnsNoOutput_ThrowsInvalidOperationException()
     {
-        // Arrange — owned chat, no history, OpenAI returns a response with no message output (GetOutputText null)
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -432,7 +432,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task StreamChatAsync_WhenOpenAiStreamsDeltas_YieldsDeltasAndPersistsOnCompletion()
     {
-        // Arrange — owned chat, no history; the streamed deltas accumulate to "Hello world"
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -480,7 +480,7 @@ public sealed class RedisChatsServiceTests
     [Fact]
     public async Task StreamChatAsync_WhenStreamIsEmpty_PersistsNothing()
     {
-        // Arrange — owned chat, no history, and a stream that yields no deltas
+        // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync(1.0);
@@ -501,7 +501,7 @@ public sealed class RedisChatsServiceTests
             deltas.Add(delta);
         }
 
-        // Assert — accumulated text is empty, so no persistence occurs
+        // Assert
         Assert.Empty(deltas);
         _databaseMock.Verify(
             d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),

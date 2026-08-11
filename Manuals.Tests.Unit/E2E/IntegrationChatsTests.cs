@@ -26,7 +26,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
     [Fact]
     public async Task RealOpenAICompletionResponds()
     {
-        // Arrange: create a chat.
+        // Arrange
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
@@ -49,7 +49,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
-        // Act: stream a message.
+        // Act
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"/chats/{chat.ChatId}/messages/stream")
@@ -68,7 +68,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
 
         var body = await streamResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
-        // Assert: the streamed body contains at least one data line.
+        // Assert
         Assert.Contains("data:", body, StringComparison.Ordinal);
         Assert.Contains("[DONE]", body, StringComparison.Ordinal);
     }
@@ -76,7 +76,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
     [Fact]
     public async Task ConversationHistoryIsPreserved()
     {
-        // Arrange: create a chat and send a first message that establishes context.
+        // Arrange
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
@@ -86,7 +86,7 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
-        // Act: ask a follow-up that only makes sense if history is sent.
+        // Act
         var second = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
             new ChatRequest("What product did I just say I need a manual for? Reply with only the product name."),

@@ -11,6 +11,7 @@ using Elastic.Ingest.Elasticsearch.DataStreams;
 using Elastic.Serilog.Sinks;
 using Elastic.Transport;
 using Manuals.Extensions;
+using Manuals.HealthChecks;
 using Manuals.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -47,6 +48,7 @@ try
         EndPoints = [redisEndpoint]
     };
     configurationOptions.Password = builder.Configuration.GetRequired<string>("RedisPassword");
+    configurationOptions.AbortOnConnectFail = false;
     if (builder.Environment.IsProduction())
     {
         var defaultAzureCredentialOptionsSection = builder.Configuration.GetRequiredSection(nameof(DefaultAzureCredentialOptions));
@@ -154,7 +156,8 @@ try
         jsonFormatter?.SupportedMediaTypes.Add("application/merge-patch+json");
     });
     builder.Services.AddOpenApi();
-    builder.Services.AddHealthChecks();
+    builder.Services.AddHealthChecks()
+        .AddCheck<RedisHealthCheck>("Redis", tags: ["cache"]);
     builder.Services
         .AddAuthentication()
         .AddJwtBearer(jwtBearerOptions =>
