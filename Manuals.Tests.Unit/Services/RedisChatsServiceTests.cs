@@ -264,9 +264,12 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, TestChatId.ToString("N"), CommandFlags.None))
             .ReturnsAsync((double?)null);
 
-        // Act / Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(
+        // Act
+        var exception = await Record.ExceptionAsync(
             () => _service.CompleteChatAsync(TestEmail, TestChatId, "hello", TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<KeyNotFoundException>(exception);
     }
 
     [Fact]
@@ -337,9 +340,12 @@ public sealed class RedisChatsServiceTests
             .ThrowsAsync(new InvalidOperationException("OpenAI unavailable"));
         var service = CreateService(openAi.Object);
 
-        // Act / Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        // Act
+        var exception = await Record.ExceptionAsync(
             () => service.CompleteChatAsync(TestEmail, TestChatId, "follow-up", TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
         openAi.Verify(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -424,9 +430,12 @@ public sealed class RedisChatsServiceTests
             .ReturnsAsync(ClientResult.FromValue(BuildEmptyResponse(), Mock.Of<PipelineResponse>()));
         var service = CreateService(openAi.Object);
 
-        // Act / Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        // Act
+        var exception = await Record.ExceptionAsync(
             () => service.CompleteChatAsync(TestEmail, TestChatId, "where is the manual?", TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
     }
 
     [Fact]
