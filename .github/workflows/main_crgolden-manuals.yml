@@ -11,9 +11,6 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: Build and analyze
@@ -188,7 +185,7 @@ jobs:
           name: .net-app
 
       - name: Login to Azure
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5  # v2
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # v3.0.1
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8DE5AD040E9A48B5ABB987D909C873E4 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_C329C8261C3244ACB850928362690ADC }}
@@ -196,7 +193,7 @@ jobs:
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
-        uses: azure/webapps-deploy@84a80cfe7e9889f35148ed88c307e6e93bf02578  # v3
+        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383  # v3.0.8
         with:
           app-name: 'crgolden-manuals'
           slot-name: 'Production'
