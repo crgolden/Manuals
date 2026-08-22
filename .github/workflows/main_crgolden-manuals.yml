@@ -119,13 +119,6 @@ jobs:
             --does-not-return-attribute DoesNotReturnAttribute `
             --include "[Manuals]*"
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: test-results
-          path: Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
-
       - name: Run integration tests with coverage
         if: github.event_name != 'pull_request'
         id: integration
@@ -145,6 +138,14 @@ jobs:
           dotnet-coverage collect `
             "dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
             -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results
+          if-no-files-found: error
+          path: Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
 
       - name: dotnet publish
         env:
