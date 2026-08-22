@@ -110,7 +110,7 @@ jobs:
         run: |
           dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
             --target "dotnet" `
-            --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx" `
+            --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
             --format opencover --output "coverage.opencover.xml" `
             --skipautoprops `
             --exclude-by-attribute GeneratedCodeAttribute `
@@ -136,7 +136,7 @@ jobs:
           OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
         run: |
           dotnet-coverage collect `
-            "dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx" `
+            "dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
             -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
 
       - name: Upload test results

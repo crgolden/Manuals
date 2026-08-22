@@ -32,7 +32,7 @@ public sealed class RedisHealthCheckTests
     public async Task CheckHealthAsync_ReturnsUnhealthyWithLastException_WhenRedisIsUnreachable()
     {
         // Arrange
-        var expected = new RedisConnectionException(ConnectionFailureType.UnableToConnect, "It was not possible to connect");
+        var expected = new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, "It was not possible to connect");
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database.Setup(d => d.PingAsync(It.IsAny<CommandFlags>())).ThrowsAsync(expected);
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
@@ -55,7 +55,7 @@ public sealed class RedisHealthCheckTests
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database
             .Setup(d => d.PingAsync(It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "down"));
+            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, "down"));
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
 
         // Act
@@ -74,7 +74,7 @@ public sealed class RedisHealthCheckTests
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database
             .SetupSequence(d => d.PingAsync(It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "transient"))
+            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, "transient"))
             .ReturnsAsync(PingLatency);
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
 
