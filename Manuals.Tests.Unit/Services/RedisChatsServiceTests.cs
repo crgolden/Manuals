@@ -200,13 +200,15 @@ public sealed class RedisChatsServiceTests
                 It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
-        await _service.UpdateChatTitleAsync(TestEmail, TestChatId, "New Title", TestContext.Current.CancellationToken);
+        var renamedChatTitle = $"title-{Guid.NewGuid()}";
+
+        await _service.UpdateChatTitleAsync(TestEmail, TestChatId, renamedChatTitle, TestContext.Current.CancellationToken);
 
         _databaseMock.Verify(
             d => d.HashSetAsync(
-                It.Is<RedisKey>(k => k.ToString() == $"chat:{TestChatId:N}:meta"),
-                It.Is<RedisValue>(f => f.ToString() == "title"),
-                It.Is<RedisValue>(v => v.ToString() == "New Title"),
+                It.Is<RedisKey>(k => string.Equals(k.ToString(), $"chat:{TestChatId:N}:meta", StringComparison.Ordinal)),
+                It.Is<RedisValue>(f => string.Equals(f.ToString(), RedisChatsService.TitleField, StringComparison.Ordinal)),
+                It.Is<RedisValue>(v => string.Equals(v.ToString(), renamedChatTitle, StringComparison.Ordinal)),
                 It.IsAny<When>(),
                 It.IsAny<CommandFlags>()),
             Times.Once);
@@ -364,7 +366,14 @@ public sealed class RedisChatsServiceTests
         Assert.NotEqual(Guid.Empty, chat.ChatId);
         Assert.Null(chat.Title);
         Assert.True(chat.CreatedAt > 0);
-        _databaseMock.Verify(d => d.HashSetAsync(It.Is<RedisKey>(k => k.ToString().StartsWith("chat:") && k.ToString().EndsWith(":meta")), It.IsAny<HashEntry[]>(), CommandFlags.None), Times.Once);
+        _databaseMock.Verify(
+            d => d.HashSetAsync(
+                It.Is<RedisKey>(k =>
+                    k.ToString().StartsWith("chat:", StringComparison.Ordinal) &&
+                    k.ToString().EndsWith(":meta", StringComparison.Ordinal)),
+                It.IsAny<HashEntry[]>(),
+                CommandFlags.None),
+            Times.Once);
         _databaseMock.Verify(d => d.SortedSetAddAsync(ChatsKey, It.IsAny<RedisValue>(), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None), Times.Once);
     }
 
@@ -470,11 +479,8 @@ public sealed class RedisChatsServiceTests
         var service = CreateService(openAi.Object);
 
         // Act
-        var deltas = new List<string>();
-        await foreach (var delta in service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken))
-        {
-            deltas.Add(delta);
-        }
+        var deltas = await DrainAsync(
+            service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(["Hello ", "world"], deltas);
@@ -504,17 +510,25 @@ public sealed class RedisChatsServiceTests
         var service = CreateService(openAi.Object);
 
         // Act
-        var deltas = new List<string>();
-        await foreach (var delta in service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken))
-        {
-            deltas.Add(delta);
-        }
+        var deltas = await DrainAsync(
+            service.StreamChatAsync(TestEmail, TestChatId, "hi", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Empty(deltas);
         _databaseMock.Verify(
             d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
             Times.Never);
+    }
+
+    private static async Task<IReadOnlyList<string>> DrainAsync(IAsyncEnumerable<string> source)
+    {
+        var drained = new List<string>();
+        await foreach (var item in source)
+        {
+            drained.Add(item);
+        }
+
+        return drained;
     }
 
     private static ResponseResult BuildEmptyResponse()

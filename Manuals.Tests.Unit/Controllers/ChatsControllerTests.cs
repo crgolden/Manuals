@@ -313,8 +313,8 @@ public sealed class ChatsControllerTests
         Assert.Equal("text/event-stream", _controller.HttpContext.Response.ContentType);
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Contains("Hello", body);
-        Assert.Contains("[DONE]", body);
+        Assert.Contains("Hello", body, StringComparison.Ordinal);
+        Assert.Contains("[DONE]", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -334,8 +334,8 @@ public sealed class ChatsControllerTests
 
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Contains("data: {\"delta\":{\"content\":\"world\"}}", body);
-        Assert.EndsWith("data: [DONE]\n\n", body);
+        Assert.Contains("data: {\"delta\":{\"content\":\"world\"}}", body, StringComparison.Ordinal);
+        Assert.EndsWith("data: [DONE]\n\n", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -386,7 +386,8 @@ public sealed class ChatsControllerTests
 
         private sealed class Enumerator : IAsyncEnumerator<string>
         {
-            public string Current { get; } = string.Empty;
+            public string Current => throw new InvalidOperationException(
+                $"{nameof(MoveNextAsync)} always throws, so {nameof(Current)} is never reachable.");
 
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 

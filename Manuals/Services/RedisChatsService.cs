@@ -12,7 +12,11 @@ using StackExchange.Redis;
 
 public sealed class RedisChatsService : IChatsService
 {
-    private const string TitleField = "title";
+    internal const string TitleField = "title";
+
+    internal const string UserRole = "user";
+
+    internal const string AssistantRole = "assistant";
 
     private static readonly JsonSerializerOptions RedisJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -68,7 +72,7 @@ public sealed class RedisChatsService : IChatsService
                     var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
                     var title = GetMetaField(meta, TitleField);
                     var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
-                    chats.Add(new Chat(chatId, IsNullOrEmpty(title) ? null : title, createdAt));
+                    chats.Add(new Chat(chatId, IsNullOrWhiteSpace(title) ? null : title, createdAt));
                 }
 
                 activity?.SetTag("chat_count", chats.Count);
@@ -85,7 +89,7 @@ public sealed class RedisChatsService : IChatsService
         var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
         var title = GetMetaField(meta, TitleField);
         var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
-        return new Chat(chatId, IsNullOrEmpty(title) ? null : title, createdAt);
+        return new Chat(chatId, IsNullOrWhiteSpace(title) ? null : title, createdAt);
     }
 
     public async Task<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
@@ -205,7 +209,7 @@ public sealed class RedisChatsService : IChatsService
         var items = new List<ResponseItem>(history.Count + 1);
         foreach (var msg in history)
         {
-            items.Add(msg.Role == "user"
+            items.Add(string.Equals(msg.Role, UserRole, StringComparison.Ordinal)
                 ? ResponseItem.CreateUserMessageItem(msg.Text)
                 : ResponseItem.CreateAssistantMessageItem(msg.Text));
         }
@@ -247,7 +251,7 @@ public sealed class RedisChatsService : IChatsService
         finally
         {
             var assistantText = accumulated.ToString();
-            if (!IsNullOrEmpty(assistantText))
+            if (!IsNullOrWhiteSpace(assistantText))
             {
                 await StoreMessagesAsync(chatId, inputText, assistantText);
                 await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), Score());
@@ -293,14 +297,14 @@ public sealed class RedisChatsService : IChatsService
     private async Task StoreMessagesAsync(Guid chatId, string userText, string assistantText)
     {
         var messagesKey = ChatMessagesKey(chatId);
-        await _database.ListRightPushAsync(messagesKey, [SerializeMessage("user", userText), SerializeMessage("assistant", assistantText)]);
+        await _database.ListRightPushAsync(messagesKey, [SerializeMessage(UserRole, userText), SerializeMessage(AssistantRole, assistantText)]);
         await _cache.RemoveAsync($"messages:{chatId:N}");
     }
 
     private async Task SetAutoTitleIfNeededAsync(Guid chatId, string inputText)
     {
         var existing = await _database.HashGetAsync(ChatMetaKey(chatId), TitleField);
-        if (!existing.HasValue || IsNullOrEmpty(existing.ToString()))
+        if (!existing.HasValue || IsNullOrWhiteSpace(existing.ToString()))
         {
             var title = inputText.Length <= 60 ? inputText : inputText[..60] + "…";
             await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);

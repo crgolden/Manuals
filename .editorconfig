@@ -294,3 +294,12 @@ dotnet_diagnostic.sa1642.severity = none
 dotnet_diagnostic.sa1643.severity = none
 dotnet_diagnostic.sa1650.severity = none
 dotnet_diagnostic.sa1651.severity = none
+
+dotnet_diagnostic.CA1054.severity = warning
+dotnet_diagnostic.CA1055.severity = warning
+dotnet_diagnostic.CA1056.severity = warning
+dotnet_diagnostic.CA1307.severity = warning
+dotnet_diagnostic.CA1309.severity = warning
+dotnet_diagnostic.CA1310.severity = warning
+dotnet_diagnostic.CA1862.severity = warning
+dotnet_diagnostic.CA1308.severity = none  # AGENTS/TELEMETRY.md fixes deployment.environment as a lowercase wire value
