@@ -270,7 +270,7 @@ public sealed class RedisChatsServiceTests
     {
         _databaseMock
             .Setup(d => d.SortedSetRangeByRankAsync(ChatsKey, 0, -1, Order.Descending, CommandFlags.None))
-            .ReturnsAsync(["not-a-guid", NewestChatId.ToString("N")]);
+            .ReturnsAsync([TestValues.LowercaseToken(12), NewestChatId.ToString("N")]);
         _databaseMock
             .Setup(d => d.HashGetAllAsync($"chat:{NewestChatId:N}:meta", CommandFlags.None))
             .ReturnsAsync([
@@ -310,7 +310,7 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.HashGetAllAsync($"chat:{TestChatId:N}:meta", CommandFlags.None))
             .ReturnsAsync([
                 new HashEntry("title", string.Empty),
-                new HashEntry("createdAt", "not-a-number")]);
+                new HashEntry("createdAt", TestValues.LowercaseToken(9))]);
 
         // Act
         var result = await _service.GetChatAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);
