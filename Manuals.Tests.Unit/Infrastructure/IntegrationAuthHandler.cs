@@ -20,7 +20,7 @@ internal sealed class IntegrationAuthHandler : AuthenticationHandler<Authenticat
     {
         var claims = new[]
         {
-            new Claim("sub", "integration-user-id"),
+            new Claim("sub", ManualsWebApplicationFactory.TestUserId),
             new Claim("email", "integration@test.invalid"),
             new Claim("scope", "manuals"),
         };
