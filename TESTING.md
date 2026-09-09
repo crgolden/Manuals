@@ -98,4 +98,4 @@ Required coverage files: `coverage.opencover.xml` (unit, OpenCover), `coverage-i
 
 ### When to build a truth table
 
-The coverage **score is read from SonarCloud, never hand-maintained** here. Build a per-method table in `COVERAGE-TRUTH-TABLES.md` only when SonarCloud flags a method with **cognitive complexity > 15 AND uncovered conditions > 0**: the table is escalation for the gnarly few, not a per-class deliverable. See `../AGENTS/DESIGN-LANGUAGE.md` and `../AGENTS/TESTING-COVERAGE.md`.
+The coverage **score is read from SonarCloud, never hand-maintained** here. Build a per-method table in the workspace `COVERAGE/Manuals.md` only when SonarCloud flags a method with **cognitive complexity > 15 AND uncovered conditions > 0**: the table is escalation for the gnarly few, not a per-class deliverable. See the workspace `COVERAGE/METHOD.md`.
