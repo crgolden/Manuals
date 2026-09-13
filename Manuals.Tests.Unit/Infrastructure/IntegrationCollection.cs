@@ -1,7 +1,6 @@
 namespace Manuals.Tests.Unit.Infrastructure;
 
-[CollectionDefinition(Name)]
+[CollectionDefinition(IntegrationIdentityConstants.CollectionName)]
 public sealed class IntegrationCollection : ICollectionFixture<ManualsWebApplicationFactory>
 {
-    public const string Name = "Integration";
 }

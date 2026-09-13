@@ -15,6 +15,10 @@ using static StatusCodes;
 [Authorize(nameof(Manuals))]
 public sealed class ChatsController : ControllerBase
 {
+    internal const string SseDoneToken = "[DONE]";
+
+    internal const string SseDoneEvent = $"data: {SseDoneToken}\n\n";
+
     private readonly IChatsService _chatsService;
 
     public ChatsController(IChatsService chatsService)
@@ -22,7 +26,9 @@ public sealed class ChatsController : ControllerBase
         _chatsService = chatsService;
     }
 
-    private string UserId => User.FindFirstValue("sub") ?? throw new InvalidOperationException("Missing sub.");
+    private string UserId =>
+        User.FindFirstValue(AuthorizationPolicies.SubjectClaimType)
+            ?? throw new InvalidOperationException($"Missing '{AuthorizationPolicies.SubjectClaimType}' claim.");
 
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<Chat>>(Status200OK)]
@@ -154,16 +160,18 @@ public sealed class ChatsController : ControllerBase
 
             await foreach (var delta in _chatsService.StreamChatAsync(UserId, chatId, request.Input, cancellationToken))
             {
-                var json = JsonSerializer.Serialize(new { delta = new { content = delta } });
-                await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                await Response.WriteAsync(SseDeltaEvent(delta), cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
             }
 
-            await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+            await Response.WriteAsync(SseDoneEvent, cancellationToken);
         }
         catch (KeyNotFoundException)
         {
             Response.StatusCode = Status404NotFound;
         }
     }
+
+    internal static string SseDeltaEvent(string delta) =>
+        $"data: {JsonSerializer.Serialize(new { delta = new { content = delta } })}\n\n";
 }

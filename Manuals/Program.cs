@@ -10,6 +10,7 @@ using Elastic.Ingest.Elasticsearch;
 using Elastic.Ingest.Elasticsearch.DataStreams;
 using Elastic.Serilog.Sinks;
 using Elastic.Transport;
+using Manuals;
 using Manuals.Extensions;
 using Manuals.HealthChecks;
 using Manuals.Services;
@@ -142,7 +143,7 @@ try
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.ConnectionMultiplexerFactory = () => Task.FromResult<IConnectionMultiplexer>(muxer);
-        options.InstanceName = "manuals:hc:";
+        options.InstanceName = RedisChatsService.CacheInstanceName;
     });
     builder.Services.AddHybridCache();
     builder.Services.AddSingleton(responsesClient);
@@ -170,7 +171,7 @@ try
         .AddPolicy(nameof(Manuals), policy =>
         {
             policy.RequireAuthenticatedUser();
-            policy.RequireClaim("scope", "manuals");
+            policy.RequireClaim(AuthorizationPolicies.ScopeClaimType, AuthorizationPolicies.ManualsScope);
         });
     builder.Services.Configure<ForwardedHeadersOptions>(forwardedHeadersOptions =>
     {
@@ -211,8 +212,8 @@ try
             return next(ctx);
         }
 
-        using (Serilog.Context.LogContext.PushProperty("UserId", ctx.User.FindFirstValue("sub")))
-        using (Serilog.Context.LogContext.PushProperty("UserEmail", ctx.User.FindFirstValue("email")))
+        using (Serilog.Context.LogContext.PushProperty("UserId", ctx.User.FindFirstValue(AuthorizationPolicies.SubjectClaimType)))
+        using (Serilog.Context.LogContext.PushProperty("UserEmail", ctx.User.FindFirstValue(AuthorizationPolicies.EmailClaimType)))
         {
             return next(ctx);
         }

@@ -14,9 +14,23 @@ public sealed class RedisChatsService : IChatsService
 {
     internal const string TitleField = "title";
 
+    internal const string CreatedAtField = "createdAt";
+
     internal const string UserRole = "user";
 
     internal const string AssistantRole = "assistant";
+
+    internal const string ModelConfigurationKey = "OpenAIModel";
+
+    internal const string MaxOutputTokenCountConfigurationKey = "OpenAIMaxOutputTokenCount";
+
+    internal const string InstructionsConfigurationKey = "OpenAIInstructions";
+
+    internal const string CacheInstanceName = "manuals:hc:";
+
+    internal const int AutoTitleMaxLength = 60;
+
+    private const string AutoTitleEllipsis = "…";
 
     private static readonly JsonSerializerOptions RedisJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -48,14 +62,14 @@ public sealed class RedisChatsService : IChatsService
         _responsesClient = responsesClient;
         _database = database;
         _cache = cache;
-        _model = configuration.GetRequired<string>("OpenAIModel");
-        _maxOutputTokenCount = configuration.GetRequired<int>("OpenAIMaxOutputTokenCount");
-        _instructions = configuration.GetRequired<string>("OpenAIInstructions");
+        _model = configuration.GetRequired<string>(ModelConfigurationKey);
+        _maxOutputTokenCount = configuration.GetRequired<int>(MaxOutputTokenCountConfigurationKey);
+        _instructions = configuration.GetRequired<string>(InstructionsConfigurationKey);
     }
 
     public async Task<IReadOnlyList<Chat>> GetChatsAsync(string userId, CancellationToken cancellationToken = default) =>
         await _cache.GetOrCreateAsync(
-            $"chats:{userId}",
+            ChatListCacheKey(userId),
             async _ =>
             {
                 using var activity = Telemetry.StartActivity("manuals.chat.list");
@@ -71,7 +85,7 @@ public sealed class RedisChatsService : IChatsService
 
                     var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
                     var title = GetMetaField(meta, TitleField);
-                    var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
+                    var createdAt = long.TryParse(GetMetaField(meta, CreatedAtField), out var ts) ? ts : 0L;
                     chats.Add(new Chat(chatId, IsNullOrWhiteSpace(title) ? null : title, createdAt));
                 }
 
@@ -88,7 +102,7 @@ public sealed class RedisChatsService : IChatsService
         await VerifyOwnershipAsync(userId, chatId);
         var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
         var title = GetMetaField(meta, TitleField);
-        var createdAt = long.TryParse(GetMetaField(meta, "createdAt"), out var ts) ? ts : 0L;
+        var createdAt = long.TryParse(GetMetaField(meta, CreatedAtField), out var ts) ? ts : 0L;
         return new Chat(chatId, IsNullOrWhiteSpace(title) ? null : title, createdAt);
     }
 
@@ -108,10 +122,10 @@ public sealed class RedisChatsService : IChatsService
         using var activity = Telemetry.StartActivity("manuals.chat.create");
         activity?.SetTag("chat.id", chatId);
         var createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        HashEntry[] meta = [new HashEntry(TitleField, Empty), new HashEntry("createdAt", createdAt)];
+        HashEntry[] meta = [new HashEntry(TitleField, Empty), new HashEntry(CreatedAtField, createdAt)];
         await _database.HashSetAsync(ChatMetaKey(chatId), meta);
-        await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), createdAt);
-        await _cache.RemoveAsync($"chats:{userId}", cancellationToken);
+        await _database.SortedSetAddAsync(ChatsKey(userId), ChatMember(chatId), createdAt);
+        await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
         return new Chat(chatId, null, createdAt);
     }
 
@@ -121,7 +135,7 @@ public sealed class RedisChatsService : IChatsService
         activity?.SetTag("chat.id", chatId);
         await VerifyOwnershipAsync(userId, chatId);
         await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
-        await _cache.RemoveAsync($"chats:{userId}", cancellationToken);
+        await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
     }
 
     public async Task DeleteChatAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
@@ -129,16 +143,16 @@ public sealed class RedisChatsService : IChatsService
         using var activity = Telemetry.StartActivity("manuals.chat.delete");
         activity?.SetTag("chat.id", chatId);
         var key = ChatsKey(userId);
-        var score = await _database.SortedSetScoreAsync(key, chatId.ToString("N"));
+        var score = await _database.SortedSetScoreAsync(key, ChatMember(chatId));
         if (score is null)
         {
             throw new KeyNotFoundException($"Chat '{chatId:N}' not found for user.");
         }
 
-        await _database.SortedSetRemoveAsync(key, chatId.ToString("N"));
+        await _database.SortedSetRemoveAsync(key, ChatMember(chatId));
         await _database.KeyDeleteAsync([ChatMetaKey(chatId), ChatMessagesKey(chatId)]);
-        await _cache.RemoveAsync($"chats:{userId}", cancellationToken);
-        await _cache.RemoveAsync($"messages:{chatId:N}", cancellationToken);
+        await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
+        await _cache.RemoveAsync(ChatMessagesCacheKey(chatId), cancellationToken);
     }
 
     public async Task<(Guid ChatId, string? OutputText)> CompleteChatAsync(
@@ -169,9 +183,9 @@ public sealed class RedisChatsService : IChatsService
         var outputText = response?.Value?.GetOutputText() ?? throw new InvalidOperationException("OpenAI returned no output.");
 
         await StoreMessagesAsync(chatId, inputText, outputText);
-        await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), Score());
+        await _database.SortedSetAddAsync(ChatsKey(userId), ChatMember(chatId), Score());
         await SetAutoTitleIfNeededAsync(chatId, inputText);
-        await _cache.RemoveAsync($"chats:{userId}", cancellationToken);
+        await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
 
         return (chatId, outputText);
     }
@@ -190,11 +204,17 @@ public sealed class RedisChatsService : IChatsService
         return StreamChatAsyncCore(userId, chatId, inputText, cancellationToken);
     }
 
-    private static string ChatsKey(string userId) => $"user:{userId}:chats";
+    internal static string ChatsKey(string userId) => $"user:{userId}:chats";
 
-    private static string ChatMetaKey(Guid chatId) => $"chat:{chatId:N}:meta";
+    internal static string ChatMetaKey(Guid chatId) => $"chat:{chatId:N}:meta";
 
-    private static string ChatMessagesKey(Guid chatId) => $"chat:{chatId:N}:messages";
+    internal static string ChatMessagesKey(Guid chatId) => $"chat:{chatId:N}:messages";
+
+    internal static string ChatMember(Guid chatId) => chatId.ToString("N");
+
+    internal static string ChatListCacheKey(string userId) => $"chats:{userId}";
+
+    internal static string ChatMessagesCacheKey(Guid chatId) => $"messages:{chatId:N}";
 
     private static double Score() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -254,16 +274,16 @@ public sealed class RedisChatsService : IChatsService
             if (!IsNullOrWhiteSpace(assistantText))
             {
                 await StoreMessagesAsync(chatId, inputText, assistantText);
-                await _database.SortedSetAddAsync(ChatsKey(userId), chatId.ToString("N"), Score());
+                await _database.SortedSetAddAsync(ChatsKey(userId), ChatMember(chatId), Score());
                 await SetAutoTitleIfNeededAsync(chatId, inputText);
-                await _cache.RemoveAsync($"chats:{userId}", CancellationToken.None);
+                await _cache.RemoveAsync(ChatListCacheKey(userId), CancellationToken.None);
             }
         }
     }
 
     private ValueTask<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesInternalAsync(Guid chatId) =>
         _cache.GetOrCreateAsync(
-            $"messages:{chatId:N}",
+            ChatMessagesCacheKey(chatId),
             async _ =>
             {
                 var items = await _database.ListRangeAsync(ChatMessagesKey(chatId));
@@ -286,7 +306,7 @@ public sealed class RedisChatsService : IChatsService
         using var activity = Telemetry.StartActivity("manuals.chat.verify_ownership");
         activity?.SetTag("chat.id", chatId);
         activity?.SetTag("user.id", userId);
-        var score = await _database.SortedSetScoreAsync(ChatsKey(userId), chatId.ToString("N"));
+        var score = await _database.SortedSetScoreAsync(ChatsKey(userId), ChatMember(chatId));
         activity?.SetTag("verified", score.HasValue);
         if (score is null)
         {
@@ -298,7 +318,7 @@ public sealed class RedisChatsService : IChatsService
     {
         var messagesKey = ChatMessagesKey(chatId);
         await _database.ListRightPushAsync(messagesKey, [SerializeMessage(UserRole, userText), SerializeMessage(AssistantRole, assistantText)]);
-        await _cache.RemoveAsync($"messages:{chatId:N}");
+        await _cache.RemoveAsync(ChatMessagesCacheKey(chatId));
     }
 
     private async Task SetAutoTitleIfNeededAsync(Guid chatId, string inputText)
@@ -306,7 +326,9 @@ public sealed class RedisChatsService : IChatsService
         var existing = await _database.HashGetAsync(ChatMetaKey(chatId), TitleField);
         if (!existing.HasValue || IsNullOrWhiteSpace(existing.ToString()))
         {
-            var title = inputText.Length <= 60 ? inputText : inputText[..60] + "…";
+            var title = inputText.Length <= AutoTitleMaxLength
+                ? inputText
+                : inputText[..AutoTitleMaxLength] + AutoTitleEllipsis;
             await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
         }
     }

@@ -10,15 +10,17 @@ using Microsoft.Extensions.Logging;
 
 public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>
 {
-    internal const string TestUserId = "integration-user-id";
+    internal const string TestScheme = IntegrationIdentityConstants.TestScheme;
 
-    internal const string TestScheme = "Integration";
+    internal const string TestUserId = IntegrationIdentityConstants.TestUserId;
+
+    internal const string TestEmailAddress = IntegrationIdentityConstants.TestEmailAddress;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices((ctx, services) =>
         {
-            if (!ctx.HostingEnvironment.IsEnvironment("Production"))
+            if (!ctx.HostingEnvironment.IsProduction())
             {
                 services.RemoveAll<ILoggerFactory>();
                 services.AddLogging(lb => lb.AddConsole());
@@ -29,7 +31,8 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
 
             services.AddAuthorizationBuilder()
                 .AddPolicy(nameof(Manuals), policy =>
-                    policy.RequireAuthenticatedUser().RequireClaim("scope", "manuals"));
+                    policy.RequireAuthenticatedUser().RequireClaim(
+                        AuthorizationPolicies.ScopeClaimType, AuthorizationPolicies.ManualsScope));
         });
     }
 }

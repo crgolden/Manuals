@@ -5,11 +5,12 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Infrastructure;
+using Manuals.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Models;
 using StackExchange.Redis;
 
-[Collection(IntegrationCollection.Name)]
+[Collection(IntegrationIdentityConstants.CollectionName)]
 [Trait("Category", "Integration")]
 public sealed class IntegrationChatsTests : IAsyncDisposable
 {
@@ -103,18 +104,22 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
     {
         foreach (var chatId in _createdChatIds)
         {
-            await _database.KeyDeleteAsync([$"chat:{chatId:N}:meta", $"chat:{chatId:N}:messages"]);
+            await _database.KeyDeleteAsync(
+                [RedisChatsService.ChatMetaKey(chatId), RedisChatsService.ChatMessagesKey(chatId)]);
 
-            await _database.KeyDeleteAsync($"manuals:hc:messages:{chatId:N}");
+            await _database.KeyDeleteAsync(L2Key(RedisChatsService.ChatMessagesCacheKey(chatId)));
         }
 
         await _database.SortedSetRemoveRangeByScoreAsync(
-            $"user:{ManualsWebApplicationFactory.TestUserId}:chats",
+            RedisChatsService.ChatsKey(ManualsWebApplicationFactory.TestUserId),
             double.NegativeInfinity,
             double.PositiveInfinity);
 
-        await _database.KeyDeleteAsync($"manuals:hc:chats:{ManualsWebApplicationFactory.TestUserId}");
+        await _database.KeyDeleteAsync(
+            L2Key(RedisChatsService.ChatListCacheKey(ManualsWebApplicationFactory.TestUserId)));
     }
+
+    private static string L2Key(string cacheKey) => $"{RedisChatsService.CacheInstanceName}{cacheKey}";
 
     private async Task<Chat> CreateChatAsync()
     {

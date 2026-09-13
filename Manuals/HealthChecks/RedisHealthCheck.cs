@@ -5,7 +5,8 @@ using StackExchange.Redis;
 
 public sealed class RedisHealthCheck : IHealthCheck
 {
-    private const int MaxAttempts = 2;
+    internal const int MaxAttempts = 2;
+
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly IConnectionMultiplexer _connectionMultiplexer;
@@ -26,7 +27,7 @@ public sealed class RedisHealthCheck : IHealthCheck
             {
                 var database = _connectionMultiplexer.GetDatabase();
                 var latency = await database.PingAsync();
-                return HealthCheckResult.Healthy($"PONG in {latency.TotalMilliseconds:F0}ms");
+                return HealthCheckResult.Healthy(HealthyDescription(latency.TotalMilliseconds));
             }
             catch (Exception ex)
             {
@@ -41,4 +42,7 @@ public sealed class RedisHealthCheck : IHealthCheck
 
         return HealthCheckResult.Unhealthy(lastException.Message, lastException);
     }
+
+    internal static string HealthyDescription(double latencyMilliseconds) =>
+        $"PONG in {latencyMilliseconds:F0}ms";
 }

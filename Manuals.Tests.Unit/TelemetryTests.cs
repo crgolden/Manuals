@@ -1,6 +1,7 @@
 namespace Manuals.Tests.Unit;
 
 using System.Diagnostics;
+using TestSupport;
 
 [Trait("Category", "Unit")]
 public sealed class TelemetryTests
@@ -10,10 +11,11 @@ public sealed class TelemetryTests
     {
         // Arrange
         using var listener = ListenToManuals();
-        using var request = new ActivitySource(nameof(Manuals)).StartActivity("GET /chats", ActivityKind.Server);
+        using var request = new ActivitySource(nameof(Manuals))
+            .StartActivity(TestValues.NewRequestActivityName(), ActivityKind.Server);
 
         // Act
-        using var work = Telemetry.StartActivity("manuals.openai.complete_chat");
+        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
 
         // Assert
         Assert.Equal(request?.SpanId, work?.ParentSpanId);
@@ -24,10 +26,11 @@ public sealed class TelemetryTests
     {
         // Arrange
         using var listener = ListenToManuals();
-        using var request = new ActivitySource(nameof(Manuals)).StartActivity("GET /chats", ActivityKind.Server);
+        using var request = new ActivitySource(nameof(Manuals))
+            .StartActivity(TestValues.NewRequestActivityName(), ActivityKind.Server);
 
         // Act
-        using var work = Telemetry.StartActivity("manuals.chat.list");
+        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
 
         // Assert
         Assert.Equal(request?.TraceId, work?.TraceId);
@@ -40,7 +43,7 @@ public sealed class TelemetryTests
         using var listener = ListenToManuals();
 
         // Act
-        using var work = Telemetry.StartActivity("manuals.chat.list");
+        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
 
         // Assert
         Assert.NotNull(work);
@@ -53,7 +56,7 @@ public sealed class TelemetryTests
         using var listener = ListenToManuals();
 
         // Act
-        using var work = Telemetry.StartActivity("manuals.chat.list");
+        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
 
         // Assert
         Assert.Null(work?.Parent);

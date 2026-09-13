@@ -49,7 +49,7 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 |---|---|
 | Framework | ASP.NET Core 10 (Controller API) |
 | AI | Azure OpenAI Responses API (`OpenAI.Responses`) |
-| Persistence | Azure Cache for Redis |
+| Persistence | Redis |
 | Auth | JWT Bearer (`manuals` scope) |
 | Observability | OpenTelemetry → Grafana Alloy (OTLP), Serilog → Elasticsearch |
 | Hosting | Azure App Service (Windows, .NET 10, F1 plan) |
@@ -61,7 +61,7 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
 | Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production |
-| Redis instance | Azure Cache for Redis or local |
+| Redis instance | Managed or self-hosted; local for development |
 
 ## Getting Started
 
@@ -88,7 +88,7 @@ dotnet user-secrets set "RedisPassword" "<your-redis-password>" --project Manual
 dotnet run --project Manuals/Manuals.csproj
 ```
 
-App starts at `https://localhost:7099`. The OpenAPI spec is available at `GET /openapi/v1.json` (development only).
+App starts at `https://localhost:7099`. The OpenAPI spec is served anonymously at `GET /openapi/v1.json` in every environment — `MapOpenApi()` is not environment-gated.
 
 ## API Reference
 
@@ -156,7 +156,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 | `OpenAIModel` | Deployed model name (e.g. `gpt-5-mini`) |
 | `OpenAIInstructions` | System prompt |
 | `OpenAIMaxOutputTokenCount` | Max tokens per completion |
-| `RedisHost` | `<your-redis>.redis.cache.windows.net` |
+| `RedisHost` | Redis host name |
 | `RedisPort` | `6380` |
 | `RedisSsl` | `true` |
 | `BlobUri` | Azure Blob Storage URL (Data Protection keys) |

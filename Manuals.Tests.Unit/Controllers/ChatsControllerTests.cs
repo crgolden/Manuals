@@ -1,5 +1,6 @@
 namespace Manuals.Tests.Unit.Controllers;
 
+using System.Net.Mime;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Manuals.Controllers;
@@ -30,10 +31,12 @@ public sealed class ChatsControllerTests
     {
         _controller.ControllerContext = CreateContextWithUser();
         var firstTitle = TestValues.NewChatTitle();
+        var firstChatId = Guid.NewGuid();
+        var secondChatId = Guid.NewGuid();
         IReadOnlyList<Chat> chats =
         [
-            new Chat(Guid.NewGuid(), firstTitle, TestValues.NewUnixSeconds()),
-            new Chat(Guid.NewGuid(), TestValues.NewChatTitle(), TestValues.NewUnixSeconds()),
+            new Chat(firstChatId, firstTitle, TestValues.NewUnixSeconds()),
+            new Chat(secondChatId, TestValues.NewChatTitle(), TestValues.NewUnixSeconds()),
         ];
         _chatsServiceMock
             .Setup(s => s.GetChatsAsync(TestUserId, It.IsAny<CancellationToken>()))
@@ -43,7 +46,7 @@ public sealed class ChatsControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var list = Assert.IsType<IReadOnlyList<Chat>>(ok.Value, exactMatch: false);
-        Assert.Equal(2, list.Count);
+        Assert.Equal(chats.Count, list.Count);
         Assert.Equal(firstTitle, list[0].Title);
     }
 
@@ -102,8 +105,8 @@ public sealed class ChatsControllerTests
         var assistantText = TestValues.NewMessageText();
         IReadOnlyList<ChatHistoryMessage> messages =
         [
-            new ChatHistoryMessage("user", TestValues.NewMessageText()),
-            new ChatHistoryMessage("assistant", assistantText),
+            new ChatHistoryMessage(RedisChatsService.UserRole, TestValues.NewMessageText()),
+            new ChatHistoryMessage(RedisChatsService.AssistantRole, assistantText),
         ];
         _chatsServiceMock
             .Setup(s => s.GetChatMessagesAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
@@ -113,8 +116,8 @@ public sealed class ChatsControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var returned = Assert.IsType<IReadOnlyList<ChatHistoryMessage>>(ok.Value, exactMatch: false);
-        Assert.Equal(2, returned.Count);
-        Assert.Equal("user", returned[0].Role);
+        Assert.Equal(messages.Count, returned.Count);
+        Assert.Equal(RedisChatsService.UserRole, returned[0].Role);
         Assert.Equal(assistantText, returned[1].Text);
     }
 
@@ -144,7 +147,7 @@ public sealed class ChatsControllerTests
 
         var created = Assert.IsType<CreatedAtActionResult>(result);
         Assert.Equal(nameof(ChatsController.GetChatAsync), created.ActionName);
-        Assert.Equal(TestChatId, created.RouteValues?["chatId"]);
+        Assert.Equal(TestChatId, created.RouteValues?[ChatsRouteConstants.ChatIdRouteValue]);
         var returned = Assert.IsType<Chat>(created.Value);
         Assert.Equal(TestChatId, returned.ChatId);
     }
@@ -164,7 +167,7 @@ public sealed class ChatsControllerTests
     public async Task PatchChatAsync_WhenTitleIsWhitespace_ReturnsBadRequest()
     {
         _controller.ControllerContext = CreateContextWithUser();
-        var patch = new ChatPatchRequest("   ");
+        var patch = new ChatPatchRequest(TestValues.NewBlank());
 
         var result = await _controller.PatchChatAsync(TestChatId, patch, TestContext.Current.CancellationToken);
 
@@ -241,7 +244,7 @@ public sealed class ChatsControllerTests
     public async Task PostMessageAsync_WhenInputIsWhitespace_ReturnsBadRequest()
     {
         _controller.ControllerContext = CreateContextWithUser();
-        var request = new ChatRequest("   ");
+        var request = new ChatRequest(TestValues.NewBlank());
 
         var result = await _controller.PostMessageAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
@@ -296,7 +299,7 @@ public sealed class ChatsControllerTests
     public async Task PostMessageStreamAsync_WhenInputIsWhitespace_Returns400()
     {
         _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
-        var request = new ChatRequest("   ");
+        var request = new ChatRequest(TestValues.NewBlank());
 
         await _controller.PostMessageStreamAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
@@ -309,7 +312,7 @@ public sealed class ChatsControllerTests
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthorizationPolicies.SubjectClaimType, TestUserId)]));
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var input = TestValues.NewMessageText();
@@ -320,11 +323,11 @@ public sealed class ChatsControllerTests
 
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest(input), TestContext.Current.CancellationToken);
 
-        Assert.Equal("text/event-stream", _controller.HttpContext.Response.ContentType);
+        Assert.Equal(MediaTypeNames.Text.EventStream, _controller.HttpContext.Response.ContentType);
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(delta, body, StringComparison.Ordinal);
-        Assert.Contains("[DONE]", body, StringComparison.Ordinal);
+        Assert.Contains(ChatsController.SseDoneToken, body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -333,7 +336,7 @@ public sealed class ChatsControllerTests
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthorizationPolicies.SubjectClaimType, TestUserId)]));
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var input = TestValues.NewMessageText();
@@ -346,8 +349,8 @@ public sealed class ChatsControllerTests
 
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Contains($"data: {{\"delta\":{{\"content\":\"{delta}\"}}}}", body, StringComparison.Ordinal);
-        Assert.EndsWith("data: [DONE]\n\n", body, StringComparison.Ordinal);
+        Assert.Contains(ChatsController.SseDeltaEvent(delta), body, StringComparison.Ordinal);
+        Assert.EndsWith(ChatsController.SseDoneEvent, body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -356,7 +359,7 @@ public sealed class ChatsControllerTests
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", TestUserId)]));
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthorizationPolicies.SubjectClaimType, TestUserId)]));
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var input = TestValues.NewMessageText();
@@ -387,7 +390,7 @@ public sealed class ChatsControllerTests
 
     private static ControllerContext CreateContextWithUser()
     {
-        var identity = new ClaimsIdentity([new Claim("sub", TestUserId)]);
+        var identity = new ClaimsIdentity([new Claim(AuthorizationPolicies.SubjectClaimType, TestUserId)]);
         var user = new ClaimsPrincipal(identity);
         return new ControllerContext { HttpContext = new DefaultHttpContext { User = user } };
     }

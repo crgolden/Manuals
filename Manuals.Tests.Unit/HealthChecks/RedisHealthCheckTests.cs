@@ -27,7 +27,7 @@ public sealed class RedisHealthCheckTests
 
         // Assert
         Assert.Equal(HealthStatus.Healthy, result.Status);
-        Assert.Equal($"PONG in {PingLatencyMilliseconds}ms", result.Description);
+        Assert.Equal(RedisHealthCheck.HealthyDescription(PingLatencyMilliseconds), result.Description);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class RedisHealthCheckTests
             TestContext.Current.CancellationToken);
 
         // Assert
-        database.Verify(d => d.PingAsync(It.IsAny<CommandFlags>()), Times.Exactly(2));
+        database.Verify(d => d.PingAsync(It.IsAny<CommandFlags>()), Times.Exactly(RedisHealthCheck.MaxAttempts));
     }
 
     [Fact]

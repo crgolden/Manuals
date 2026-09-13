@@ -20,9 +20,9 @@ internal sealed class IntegrationAuthHandler : AuthenticationHandler<Authenticat
     {
         var claims = new[]
         {
-            new Claim("sub", ManualsWebApplicationFactory.TestUserId),
-            new Claim("email", "integration@test.invalid"),
-            new Claim("scope", "manuals"),
+            new Claim(AuthorizationPolicies.SubjectClaimType, ManualsWebApplicationFactory.TestUserId),
+            new Claim(AuthorizationPolicies.EmailClaimType, ManualsWebApplicationFactory.TestEmailAddress),
+            new Claim(AuthorizationPolicies.ScopeClaimType, AuthorizationPolicies.ManualsScope),
         };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
