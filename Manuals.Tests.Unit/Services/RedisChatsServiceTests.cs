@@ -597,48 +597,20 @@ public sealed class RedisChatsServiceTests
         return drained;
     }
 
-    private static ResponseResult ReadResponseResult(string json) =>
-        ModelReaderWriter.Read<ResponseResult>(BinaryData.FromString(json))
-            ?? throw new InvalidOperationException($"{nameof(ModelReaderWriter)} could not read a {nameof(ResponseResult)}.");
-
-    private static ResponseResult BuildEmptyResponse()
+    private static ResponseResult BuildEmptyResponse() => new()
     {
-        var json = $$"""
-        {
-          "id": {{JsonSerializer.Serialize(TestValues.NewResponseId())}},
-          "object": "response",
-          "created_at": {{TestValues.NewUnixSeconds()}},
-          "status": "completed",
-          "model": {{JsonSerializer.Serialize(TestValues.NewModelName())}},
-          "parallel_tool_calls": false,
-          "output": []
-        }
-        """;
-        return ReadResponseResult(json);
-    }
+        Id = TestValues.NewResponseId(),
+        CreatedAt = DateTimeOffset.FromUnixTimeSeconds(TestValues.NewUnixSeconds()),
+        Status = ResponseStatus.Completed,
+        Model = TestValues.NewModelName(),
+        ParallelToolCallsEnabled = false,
+    };
 
     private static ResponseResult BuildResponse(string outputText)
     {
-        var json = $$"""
-        {
-          "id": {{JsonSerializer.Serialize(TestValues.NewResponseId())}},
-          "object": "response",
-          "created_at": {{TestValues.NewUnixSeconds()}},
-          "status": "completed",
-          "model": {{JsonSerializer.Serialize(TestValues.NewModelName())}},
-          "parallel_tool_calls": false,
-          "output": [
-            {
-              "type": "message",
-              "id": {{JsonSerializer.Serialize(TestValues.NewOutputMessageId())}},
-              "status": "completed",
-              "role": "assistant",
-              "content": [ { "type": "output_text", "text": {{JsonSerializer.Serialize(outputText)}}, "annotations": [] } ]
-            }
-          ]
-        }
-        """;
-        return ReadResponseResult(json);
+        var response = BuildEmptyResponse();
+        response.OutputItems.Add(ResponseItem.CreateAssistantMessageItem(outputText));
+        return response;
     }
 
     private RedisChatsService CreateService(ResponsesClient responsesClient)
