@@ -29,6 +29,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatsAsync_ReturnsOkWithList()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var firstTitle = TestValues.NewChatTitle();
         var firstChatId = Guid.NewGuid();
@@ -42,6 +43,7 @@ public sealed class ChatsControllerTests
             .Setup(s => s.GetChatsAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chats);
 
+        // Act
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -53,11 +55,13 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatsAsync_WhenEmpty_ReturnsOkWithEmptyList()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.GetChatsAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
+        // Act
         var result = await _controller.GetChatsAsync(TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -68,6 +72,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatAsync_ReturnsOkWithChat()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var title = TestValues.NewChatTitle();
         var createdAt = TestValues.NewUnixSeconds();
@@ -76,6 +81,7 @@ public sealed class ChatsControllerTests
             .Setup(s => s.GetChatAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chat);
 
+        // Act
         var result = await _controller.GetChatAsync(TestChatId, TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -88,11 +94,13 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatAsync_WhenNotFound_ReturnsNotFound()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.GetChatAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
+        // Act
         var result = await _controller.GetChatAsync(MissingChatId, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
@@ -101,6 +109,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatMessagesAsync_ReturnsOkWithMessages()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var assistantText = TestValues.NewMessageText();
         IReadOnlyList<ChatHistoryMessage> messages =
@@ -112,6 +121,7 @@ public sealed class ChatsControllerTests
             .Setup(s => s.GetChatMessagesAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(messages);
 
+        // Act
         var result = await _controller.GetChatMessagesAsync(TestChatId, TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -124,11 +134,13 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task GetChatMessagesAsync_WhenNotFound_ReturnsNotFound()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.GetChatMessagesAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
+        // Act
         var result = await _controller.GetChatMessagesAsync(MissingChatId, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
@@ -137,12 +149,14 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostChatAsync_ReturnsCreatedAtActionWithChat()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var chat = new Chat(TestChatId, null, TestValues.NewUnixSeconds());
         _chatsServiceMock
             .Setup(s => s.CreateChatAsync(TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chat);
 
+        // Act
         var result = await _controller.PostChatAsync(TestContext.Current.CancellationToken);
 
         var created = Assert.IsType<CreatedAtActionResult>(result);
@@ -155,9 +169,11 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PatchChatAsync_WhenTitleIsNull_ReturnsBadRequest()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var patch = new ChatPatchRequest(null);
 
+        // Act
         var result = await _controller.PatchChatAsync(TestChatId, patch, TestContext.Current.CancellationToken);
 
         Assert.IsType<BadRequestObjectResult>(result);
@@ -166,9 +182,11 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PatchChatAsync_WhenTitleIsWhitespace_ReturnsBadRequest()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var patch = new ChatPatchRequest(TestValues.NewBlank());
 
+        // Act
         var result = await _controller.PatchChatAsync(TestChatId, patch, TestContext.Current.CancellationToken);
 
         Assert.IsType<BadRequestObjectResult>(result);
@@ -177,6 +195,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PatchChatAsync_WhenValid_ReturnsNoContent()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var newTitle = TestValues.NewChatTitle();
         _chatsServiceMock
@@ -184,6 +203,7 @@ public sealed class ChatsControllerTests
             .Returns(Task.CompletedTask);
         var patch = new ChatPatchRequest(newTitle);
 
+        // Act
         var result = await _controller.PatchChatAsync(TestChatId, patch, TestContext.Current.CancellationToken);
 
         Assert.IsType<NoContentResult>(result);
@@ -192,12 +212,14 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PatchChatAsync_WhenNotFound_ReturnsNotFound()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.UpdateChatTitleAsync(TestUserId, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
         var patch = new ChatPatchRequest(TestValues.NewChatTitle());
 
+        // Act
         var result = await _controller.PatchChatAsync(MissingChatId, patch, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
@@ -206,11 +228,13 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task DeleteChatAsync_ReturnsNoContent()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.DeleteChatAsync(TestUserId, TestChatId, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        // Act
         var result = await _controller.DeleteChatAsync(TestChatId, TestContext.Current.CancellationToken);
 
         Assert.IsType<NoContentResult>(result);
@@ -219,11 +243,13 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task DeleteChatAsync_WhenNotFound_ReturnsNotFound()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.DeleteChatAsync(TestUserId, MissingChatId, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
 
+        // Act
         var result = await _controller.DeleteChatAsync(MissingChatId, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
@@ -232,9 +258,11 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageAsync_WhenInputIsEmpty_ReturnsBadRequest()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var request = new ChatRequest(string.Empty);
 
+        // Act
         var result = await _controller.PostMessageAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
         Assert.IsType<BadRequestObjectResult>(result);
@@ -243,9 +271,11 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageAsync_WhenInputIsWhitespace_ReturnsBadRequest()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var request = new ChatRequest(TestValues.NewBlank());
 
+        // Act
         var result = await _controller.PostMessageAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
         Assert.IsType<BadRequestObjectResult>(result);
@@ -254,6 +284,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageAsync_WhenInputIsValid_ReturnsOkWithResponse()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         var input = TestValues.NewMessageText();
         var output = TestValues.NewMessageText();
@@ -262,6 +293,7 @@ public sealed class ChatsControllerTests
             .ReturnsAsync((TestChatId, output));
         var request = new ChatRequest(input);
 
+        // Act
         var result = await _controller.PostMessageAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -273,12 +305,14 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageAsync_WhenNotFound_ReturnsNotFound()
     {
+        // Arrange
         _controller.ControllerContext = CreateContextWithUser();
         _chatsServiceMock
             .Setup(s => s.CompleteChatAsync(TestUserId, MissingChatId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException());
         var request = new ChatRequest(TestValues.NewMessageText());
 
+        // Act
         var result = await _controller.PostMessageAsync(MissingChatId, request, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
@@ -287,28 +321,35 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageStreamAsync_WhenInputIsEmpty_Returns400()
     {
+        // Arrange
         _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         var request = new ChatRequest(string.Empty);
 
+        // Act
         await _controller.PostMessageStreamAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
+        // Assert
         Assert.Equal(StatusCodes.Status400BadRequest, _controller.HttpContext.Response.StatusCode);
     }
 
     [Fact]
     public async Task PostMessageStreamAsync_WhenInputIsWhitespace_Returns400()
     {
+        // Arrange
         _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         var request = new ChatRequest(TestValues.NewBlank());
 
+        // Act
         await _controller.PostMessageStreamAsync(TestChatId, request, TestContext.Current.CancellationToken);
 
+        // Assert
         Assert.Equal(StatusCodes.Status400BadRequest, _controller.HttpContext.Response.StatusCode);
     }
 
     [Fact]
     public async Task PostMessageStreamAsync_WhenInputIsValid_WritesEventStream()
     {
+        // Arrange
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
@@ -321,8 +362,10 @@ public sealed class ChatsControllerTests
             .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, input, It.IsAny<CancellationToken>()))
             .Returns(SingleDelta(delta, TestContext.Current.CancellationToken));
 
+        // Act
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest(input), TestContext.Current.CancellationToken);
 
+        // Assert
         Assert.Equal(MediaTypeNames.Text.EventStream, _controller.HttpContext.Response.ContentType);
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -333,6 +376,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageStreamAsync_WritesCorrectSseJsonFormat()
     {
+        // Arrange
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
@@ -345,8 +389,10 @@ public sealed class ChatsControllerTests
             .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, input, It.IsAny<CancellationToken>()))
             .Returns(SingleDelta(delta, TestContext.Current.CancellationToken));
 
+        // Act
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest(input), TestContext.Current.CancellationToken);
 
+        // Assert
         responseBody.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(responseBody).ReadToEndAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(ChatsController.SseDeltaEvent(delta), body, StringComparison.Ordinal);
@@ -356,6 +402,7 @@ public sealed class ChatsControllerTests
     [Fact]
     public async Task PostMessageStreamAsync_WhenServiceThrowsKeyNotFoundException_Returns404()
     {
+        // Arrange
         var responseBody = new MemoryStream();
         var httpContext = new DefaultHttpContext();
         httpContext.Response.Body = responseBody;
@@ -367,18 +414,25 @@ public sealed class ChatsControllerTests
             .Setup(s => s.StreamChatAsync(TestUserId, TestChatId, input, It.IsAny<CancellationToken>()))
             .Returns(new KeyNotFoundAsyncEnumerable());
 
+        // Act
         await _controller.PostMessageStreamAsync(TestChatId, new ChatRequest(input), TestContext.Current.CancellationToken);
 
+        // Assert
         Assert.Equal(StatusCodes.Status404NotFound, _controller.HttpContext.Response.StatusCode);
     }
 
     [Fact]
     public async Task GetChatsAsync_WhenSubClaimMissing_ThrowsInvalidOperationException()
     {
+        // Arrange
         _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        // Act
+        var exception = await Record.ExceptionAsync(
             () => _controller.GetChatsAsync(TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
     }
 
     private static async IAsyncEnumerable<string> SingleDelta(string value, [EnumeratorCancellation] CancellationToken cancellationToken = default)

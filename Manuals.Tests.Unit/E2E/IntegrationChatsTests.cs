@@ -31,12 +31,14 @@ public sealed class IntegrationChatsTests : IAsyncDisposable
         var chat = await CreateChatAsync();
         _createdChatIds.Add(chat.ChatId);
 
+        // Act
         var response = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
             new ChatRequest("Can you help me find the manual for an LG OLED TV?"),
             cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result?.Output);
