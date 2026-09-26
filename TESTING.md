@@ -56,7 +56,7 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### Data Isolation
 
-Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), which the factory requires at start. At the end of the run `ManualsWebApplicationFactory.DisposeAsync` deletes every key in the connected database after checking that its number is 1, which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
+Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), which the factory requires at start. `ManualsWebApplicationFactory` deletes every key in the connected database in `InitializeAsync` before the first test and in `DisposeAsync` after the last, each time after checking that its number is 1, so a run that crashed before its own `DisposeAsync` leaves nothing for the next one; the sweep which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
 
 Concurrent runs against the same Redis instance are not supported.
 

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>
+public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     internal static readonly string TestScheme = Generated.LowercaseToken(12);
 
@@ -21,6 +21,11 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
     private bool _hostCreated;
 
     public string? RefusedDatabase { get; private set; }
+
+    public async ValueTask InitializeAsync()
+    {
+        await DeleteEveryKeyInTheTestDatabaseAsync();
+    }
 
     public override async ValueTask DisposeAsync()
     {
