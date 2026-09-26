@@ -1,12 +1,11 @@
-#pragma warning disable OPENAI001
 namespace Manuals.Services;
 
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using Extensions;
+using Manuals.Extensions;
+using Manuals.Models;
 using Microsoft.Extensions.Caching.Hybrid;
-using Models;
 using OpenAI.Responses;
 using StackExchange.Redis;
 
@@ -52,16 +51,19 @@ public sealed class RedisChatsService : IChatsService
     private readonly string _model;
     private readonly int _maxOutputTokenCount;
     private readonly string _instructions;
+    private readonly Telemetry _telemetry;
 
     public RedisChatsService(
         ResponsesClient responsesClient,
         IDatabase database,
         HybridCache cache,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        Telemetry telemetry)
     {
         _responsesClient = responsesClient;
         _database = database;
         _cache = cache;
+        _telemetry = telemetry;
         _model = configuration.GetRequired<string>(ModelConfigurationKey);
         _maxOutputTokenCount = configuration.GetRequired<int>(MaxOutputTokenCountConfigurationKey);
         _instructions = configuration.GetRequired<string>(InstructionsConfigurationKey);
@@ -72,8 +74,8 @@ public sealed class RedisChatsService : IChatsService
             ChatListCacheKey(userId),
             async _ =>
             {
-                using var activity = Telemetry.StartActivity("manuals.chat.list");
-                activity?.SetTag("user.id", userId);
+                using var activity = _telemetry.StartActivity("manuals.chat.list");
+                activity?.SetTag(Telemetry.UserIdTag, userId);
                 var members = await _database.SortedSetRangeByRankAsync(ChatsKey(userId), order: Order.Descending);
                 var chats = new List<Chat>(members.Length);
                 foreach (var member in members)
@@ -89,7 +91,7 @@ public sealed class RedisChatsService : IChatsService
                     chats.Add(new Chat(chatId, IsNullOrWhiteSpace(title) ? null : title, createdAt));
                 }
 
-                activity?.SetTag("chat_count", chats.Count);
+                activity?.SetTag(Telemetry.ChatCountTag, chats.Count);
                 return (IReadOnlyList<Chat>)chats;
             },
             ChatListCacheOptions,
@@ -97,8 +99,8 @@ public sealed class RedisChatsService : IChatsService
 
     public async Task<Chat> GetChatAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        using var activity = Telemetry.StartActivity("manuals.chat.get");
-        activity?.SetTag("chat.id", chatId);
+        using var activity = _telemetry.StartActivity("manuals.chat.get");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
         await VerifyOwnershipAsync(userId, chatId);
         var meta = await _database.HashGetAllAsync(ChatMetaKey(chatId));
         var title = GetMetaField(meta, TitleField);
@@ -108,21 +110,21 @@ public sealed class RedisChatsService : IChatsService
 
     public async Task<IReadOnlyList<ChatHistoryMessage>> GetChatMessagesAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        using var activity = Telemetry.StartActivity("manuals.chat.get_messages");
-        activity?.SetTag("chat.id", chatId);
+        using var activity = _telemetry.StartActivity("manuals.chat.get_messages");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
         await VerifyOwnershipAsync(userId, chatId);
         var messages = await GetChatMessagesInternalAsync(chatId);
-        activity?.SetTag("message_count", messages.Count);
+        activity?.SetTag(Telemetry.MessageCountTag, messages.Count);
         return messages;
     }
 
     public async Task<Chat> CreateChatAsync(string userId, CancellationToken cancellationToken = default)
     {
         var chatId = Guid.NewGuid();
-        using var activity = Telemetry.StartActivity("manuals.chat.create");
-        activity?.SetTag("chat.id", chatId);
+        using var activity = _telemetry.StartActivity("manuals.chat.create");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
         var createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        HashEntry[] meta = [new HashEntry(TitleField, Empty), new HashEntry(CreatedAtField, createdAt)];
+        HashEntry[] meta = [new HashEntry(CreatedAtField, createdAt)];
         await _database.HashSetAsync(ChatMetaKey(chatId), meta);
         await _database.SortedSetAddAsync(ChatsKey(userId), ChatMember(chatId), createdAt);
         await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
@@ -131,8 +133,8 @@ public sealed class RedisChatsService : IChatsService
 
     public async Task UpdateChatTitleAsync(string userId, Guid chatId, string title, CancellationToken cancellationToken = default)
     {
-        using var activity = Telemetry.StartActivity("manuals.chat.update_title");
-        activity?.SetTag("chat.id", chatId);
+        using var activity = _telemetry.StartActivity("manuals.chat.update_title");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
         await VerifyOwnershipAsync(userId, chatId);
         await _database.HashSetAsync(ChatMetaKey(chatId), TitleField, title);
         await _cache.RemoveAsync(ChatListCacheKey(userId), cancellationToken);
@@ -140,8 +142,8 @@ public sealed class RedisChatsService : IChatsService
 
     public async Task DeleteChatAsync(string userId, Guid chatId, CancellationToken cancellationToken = default)
     {
-        using var activity = Telemetry.StartActivity("manuals.chat.delete");
-        activity?.SetTag("chat.id", chatId);
+        using var activity = _telemetry.StartActivity("manuals.chat.delete");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
         var key = ChatsKey(userId);
         var score = await _database.SortedSetScoreAsync(key, ChatMember(chatId));
         if (score is null)
@@ -176,8 +178,8 @@ public sealed class RedisChatsService : IChatsService
             Instructions = _instructions
         };
 
-        using var activity = Telemetry.StartActivity("manuals.openai.complete_chat");
-        activity?.SetTag("ai.model", _model);
+        using var activity = _telemetry.StartActivity("manuals.openai.complete_chat");
+        activity?.SetTag(Telemetry.AiModelTag, _model);
 
         var response = await _responsesClient.CreateResponseAsync(options, cancellationToken);
         var outputText = response?.Value?.GetOutputText() ?? throw new InvalidOperationException("OpenAI returned no output.");
@@ -255,8 +257,8 @@ public sealed class RedisChatsService : IChatsService
             StreamingEnabled = true
         };
 
-        using var activity = Telemetry.StartActivity("manuals.openai.stream_chat");
-        activity?.SetTag("ai.model", _model);
+        using var activity = _telemetry.StartActivity("manuals.openai.stream_chat");
+        activity?.SetTag(Telemetry.AiModelTag, _model);
 
         var accumulated = new StringBuilder();
         try
@@ -303,11 +305,11 @@ public sealed class RedisChatsService : IChatsService
 
     private async Task VerifyOwnershipAsync(string userId, Guid chatId)
     {
-        using var activity = Telemetry.StartActivity("manuals.chat.verify_ownership");
-        activity?.SetTag("chat.id", chatId);
-        activity?.SetTag("user.id", userId);
+        using var activity = _telemetry.StartActivity("manuals.chat.verify_ownership");
+        activity?.SetTag(Telemetry.ChatIdTag, chatId);
+        activity?.SetTag(Telemetry.UserIdTag, userId);
         var score = await _database.SortedSetScoreAsync(ChatsKey(userId), ChatMember(chatId));
-        activity?.SetTag("verified", score.HasValue);
+        activity?.SetTag(Telemetry.VerifiedTag, score.HasValue);
         if (score is null)
         {
             throw new KeyNotFoundException($"Chat '{chatId:N}' not found for user.");

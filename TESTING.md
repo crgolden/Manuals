@@ -30,32 +30,35 @@ Requires a running Redis instance and an Azure OpenAI endpoint. No `az login` ne
 
 1. Set `ASPNETCORE_ENVIRONMENT=Development` so the non-production branch of `Program.cs` runs and User Secrets load.
 2. Ensure User Secrets include: `RedisHost`, `RedisPort`, `RedisSsl`, `RedisPassword`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIInstructions`, `OpenAIMaxOutputTokenCount`, `OpenAIApiKey`, `OidcAuthority`.
+3. The prompts the tests send the model come from the `IntegrationPrompts` configuration section, never from test code. `TestSupport/IntegrationPrompts.From` binds it and fails, naming the key, when a value is missing or blank.
+
+   | Key | Local source | CI source (repo variable) | Shape |
+   |---|---|---|---|
+   | `IntegrationPrompts:ManualRequestFormat` | `Manuals/appsettings.Development.json` | `INTEGRATION_PROMPTS_MANUAL_REQUEST_FORMAT` | Composite format; `{0}` receives the generated product model |
+   | `IntegrationPrompts:RecallProduct` | `Manuals/appsettings.Development.json` | `INTEGRATION_PROMPTS_RECALL_PRODUCT` | Plain prompt asking the model to repeat the product it was told |
+
+   CI maps each variable onto the key through the integration step's environment (`IntegrationPrompts__ManualRequestFormat`, `IntegrationPrompts__RecallProduct`). Change a prompt in both places together: the local file and the repo variable are independent copies, and nothing checks that they agree.
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-dotnet build Manuals.Tests.Unit --configuration Debug
-.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Integration" -showLiveOutput
+dotnet build Manuals.Tests.Integration --configuration Debug
+.\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
 
 # Redirect output for in-flight inspection
-cmd /c "Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
+cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
 ```
 
 ## Test Infrastructure
 
 ### `ManualsWebApplicationFactory`
 
-`WebApplicationFactory<Program>` used by integration tests. Starts the full `Program.cs` with `ASPNETCORE_ENVIRONMENT=Development`, which selects the non-production branch: `ApiKeyCredential` for OpenAI, User Secrets for Redis, ephemeral Data Protection, no Azure credentials. The only replacement is the authentication scheme — `IntegrationAuthHandler` always authenticates as `sub = ManualsWebApplicationFactory.TestUserId` (`"integration-user-id"`), bypassing JWT validation.
+`WebApplicationFactory<Program>` used by integration tests. Starts the full `Program.cs` with `ASPNETCORE_ENVIRONMENT=Development`, which selects the non-production branch: `ApiKeyCredential` for OpenAI, User Secrets for Redis, ephemeral Data Protection, no Azure credentials. Besides console logging, the only replacement is the authentication scheme: `IntegrationAuthHandler` always authenticates as `sub = ManualsWebApplicationFactory.TestUserId`, a `Guid` generated per run, bypassing JWT validation. The `Manuals` policy under test is `Program.cs`'s own.
 
 ### Data Isolation
 
-Integration tests write to real Redis using the key prefix `user:integration-user-id:chats` and clean up in `IAsyncDisposable.DisposeAsync`. Cleanup covers both key namespaces:
-
-- **Primary store:** `chat:{chatId:N}:meta`, `chat:{chatId:N}:messages`, and the `user:integration-user-id:chats` sorted set.
-- **HybridCache L2:** `manuals:hc:messages:{chatId:N}` per chat, and `manuals:hc:chats:integration-user-id` for the list. These are serialized C# objects written by `IDistributedCache` and will serve stale data on the next test run if not deleted.
+Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), which the factory requires at start. At the end of the run `ManualsWebApplicationFactory.DisposeAsync` deletes every key in the connected database after checking that its number is 1, which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
 
 Concurrent runs against the same Redis instance are not supported.
-
-`DisposeAsync` must use `TestUserId` — never a hardcoded email string. If `TestUserId` ever migrates, grep all of `Manuals.Tests.Unit/` before declaring complete (prior `email→sub` migration left stale cleanup code that leaked state across runs).
 
 ### `IntegrationCollection` / `IntegrationChatsTests`
 

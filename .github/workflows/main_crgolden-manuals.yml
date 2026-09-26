@@ -130,21 +130,32 @@ jobs:
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" `
             /d:sonar.exclusions="**/bin/**,**/obj/**" `
             /d:sonar.coverage.exclusions="**/Program.cs" `
+            /d:sonar.qualitygate.wait=true `
             /d:sonar.scanner.skipJreProvisioning=true
 
       - name: Build with dotnet
         env:
           NuGetPackageSourceCredentials_GitHub: Username=${{ github.actor }};Password=${{ secrets.PACKAGES_READ_TOKEN }}
-        run: dotnet build --no-incremental --configuration Release /p:RestoreLockedMode=true
+        run: dotnet build --no-incremental --configuration Release /p:RestoreLockedMode=true -warnaserror
 
       - name: Restore local tools
         run: dotnet tool restore
+
+      - name: ReSharper inspection (jb inspectcode)
+        run: |
+          dotnet jb inspectcode Manuals.slnx --no-build -e=WARNING --output=inspectcode.sarif
+          $results = @((Get-Content inspectcode.sarif -Raw | ConvertFrom-Json).runs | ForEach-Object { $_.results })
+          foreach ($result in $results) {
+            $location = $result.locations[0].physicalLocation
+            Write-Output "::error file=$($location.artifactLocation.uri),line=$($location.region.startLine)::$($result.ruleId) $($result.message.text)"
+          }
+          if ($results.Count -gt 0) { exit 1 }
 
       - name: Run unit tests with coverage
         run: |
           dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
             --target "dotnet" `
-            --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
+            --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
             --format opencover --output "coverage.opencover.xml" `
             --skipautoprops `
             --exclude-by-attribute GeneratedCodeAttribute `
@@ -163,14 +174,17 @@ jobs:
           RedisPort: ${{ vars.REDIS_PORT }}
           RedisSsl: true
           RedisPassword: ${{ secrets.REDIS_PASSWORD }}
+          RedisDatabase: ${{ vars.REDIS_DATABASE_TEST }}
           OpenAIEndpoint: ${{ vars.OPENAI_ENDPOINT }}
           OpenAIModel: ${{ vars.OPENAI_MODEL }}
           OpenAIMaxOutputTokenCount: ${{ vars.OPENAI_MAX_OUTPUT_TOKEN_COUNT }}
           OpenAIInstructions: ${{ vars.OPENAI_INSTRUCTIONS }}
           OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
+          IntegrationPrompts__ManualRequestFormat: ${{ vars.INTEGRATION_PROMPTS_MANUAL_REQUEST_FORMAT }}
+          IntegrationPrompts__RecallProduct: ${{ vars.INTEGRATION_PROMPTS_RECALL_PRODUCT }}
         run: |
           dotnet-coverage collect `
-            "dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Integration --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
+            "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults" `
             -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
 
       - name: Upload test results
@@ -179,7 +193,9 @@ jobs:
         with:
           name: test-results
           if-no-files-found: error
-          path: Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
+          path: |
+            Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
+            Manuals.Tests.Integration/bin/Release/net10.0/TestResults/
 
       - name: dotnet publish
         env:

@@ -2,13 +2,13 @@ namespace Manuals.Controllers;
 
 using System.Security.Claims;
 using System.Text.Json;
+using Manuals.Models;
+using Manuals.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
-using Models;
-using Services;
 using static System.Net.Mime.MediaTypeNames.Text;
-using static StatusCodes;
+using static Microsoft.AspNetCore.Http.StatusCodes;
 
 [ApiController]
 [Route("[controller]")]
@@ -17,7 +17,9 @@ public sealed class ChatsController : ControllerBase
 {
     internal const string SseDoneToken = "[DONE]";
 
-    internal const string SseDoneEvent = $"data: {SseDoneToken}\n\n";
+    internal const string SseDataPrefix = "data: ";
+
+    internal const string SseDoneEvent = $"{SseDataPrefix}{SseDoneToken}\n\n";
 
     private readonly IChatsService _chatsService;
 
@@ -173,5 +175,5 @@ public sealed class ChatsController : ControllerBase
     }
 
     internal static string SseDeltaEvent(string delta) =>
-        $"data: {JsonSerializer.Serialize(new { delta = new { content = delta } })}\n\n";
+        $"{SseDataPrefix}{JsonSerializer.Serialize(new { delta = new { content = delta } })}\n\n";
 }

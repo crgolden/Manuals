@@ -3,22 +3,21 @@ namespace Manuals.Tests.Unit.Services;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Text.Json;
+using Manuals.Models;
 using Manuals.Services;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Models;
 using Moq;
 using OpenAI.Responses;
 using StackExchange.Redis;
-using TestSupport;
 
 [Trait("Category", "Unit")]
-public sealed class RedisChatsServiceTests
+public sealed class RedisChatsServiceTests : IDisposable
 {
     private const long UnparseableCreatedAt = 0L;
 
-    private static readonly string TestEmail = TestValues.NewEmailAddress();
+    private static readonly string TestEmail = Generated.NewEmailAddress();
     private static readonly Guid TestChatId = Guid.NewGuid();
     private static readonly Guid NewestChatId = Guid.NewGuid();
     private static readonly Guid OldestChatId = Guid.NewGuid();
@@ -28,6 +27,7 @@ public sealed class RedisChatsServiceTests
 
     private readonly Mock<IDatabase> _databaseMock = new(MockBehavior.Strict);
     private readonly IConfiguration _configuration;
+    private readonly Telemetry _telemetry = new();
     private readonly RedisChatsService _service;
 
     public RedisChatsServiceTests()
@@ -35,9 +35,9 @@ public sealed class RedisChatsServiceTests
         _configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [RedisChatsService.ModelConfigurationKey] = TestValues.NewModelName(),
-                [RedisChatsService.MaxOutputTokenCountConfigurationKey] = TestValues.NewMaxOutputTokenCount(),
-                [RedisChatsService.InstructionsConfigurationKey] = TestValues.NewInstructions(),
+                [RedisChatsService.ModelConfigurationKey] = Generated.NewModelName(),
+                [RedisChatsService.MaxOutputTokenCountConfigurationKey] = Generated.NewMaxOutputTokenCount(),
+                [RedisChatsService.InstructionsConfigurationKey] = Generated.NewInstructions(),
             })
             .Build();
 
@@ -76,7 +76,7 @@ public sealed class RedisChatsServiceTests
     {
         // Act
         var exception = await Record.ExceptionAsync(
-            () => _service.CompleteChatAsync(TestEmail, TestChatId, TestValues.NewBlank(), TestContext.Current.CancellationToken));
+            () => _service.CompleteChatAsync(TestEmail, TestChatId, Generated.NewBlank(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentNullException>(exception);
@@ -98,7 +98,7 @@ public sealed class RedisChatsServiceTests
     {
         // Act
         var exception = Record.Exception(
-            () => _service.StreamChatAsync(TestEmail, TestChatId, TestValues.NewBlank(), TestContext.Current.CancellationToken));
+            () => _service.StreamChatAsync(TestEmail, TestChatId, Generated.NewBlank(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentNullException>(exception);
@@ -130,8 +130,8 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.SortedSetRangeByRankAsync(ChatsKey, 0, -1, Order.Descending, CommandFlags.None))
             .ReturnsAsync([RedisChatsService.ChatMember(NewestChatId), RedisChatsService.ChatMember(OldestChatId)]);
 
-        var newestTitle = TestValues.NewChatTitle();
-        var newestCreatedAt = TestValues.NewUnixSeconds();
+        var newestTitle = Generated.NewChatTitle();
+        var newestCreatedAt = Generated.NewUnixSeconds();
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(NewestChatId), CommandFlags.None))
             .ReturnsAsync([
@@ -141,20 +141,15 @@ public sealed class RedisChatsServiceTests
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(OldestChatId), CommandFlags.None))
             .ReturnsAsync([
-                new HashEntry(RedisChatsService.TitleField, TestValues.NewChatTitle()),
-                new HashEntry(RedisChatsService.CreatedAtField, TestValues.NewUnixSeconds())]);
+                new HashEntry(RedisChatsService.TitleField, Generated.NewChatTitle()),
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);
 
         Assert.Collection(
             result,
-            newest =>
-            {
-                Assert.Equal(NewestChatId, newest.ChatId);
-                Assert.Equal(newestTitle, newest.Title);
-                Assert.Equal(newestCreatedAt, newest.CreatedAt);
-            },
+            newest => Assert.Equal((NewestChatId, newestTitle, newestCreatedAt), (newest.ChatId, newest.Title, newest.CreatedAt)),
             oldest => Assert.Equal(OldestChatId, oldest.ChatId));
     }
 
@@ -184,7 +179,7 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(UntitledChatId), CommandFlags.None))
             .ReturnsAsync([
                 new HashEntry(RedisChatsService.TitleField, string.Empty),
-                new HashEntry(RedisChatsService.CreatedAtField, TestValues.NewUnixSeconds())]);
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);
@@ -197,9 +192,9 @@ public sealed class RedisChatsServiceTests
     public async Task GetChatAsync_WhenOwned_ReturnsChatWithMeta()
     {
         // Arrange
-        var score = TestValues.NewSortedSetScore();
-        var title = TestValues.NewChatTitle();
-        var createdAt = TestValues.NewUnixSeconds();
+        var score = Generated.NewSortedSetScore();
+        var title = Generated.NewChatTitle();
+        var createdAt = Generated.NewUnixSeconds();
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
             .ReturnsAsync(score);
@@ -221,13 +216,13 @@ public sealed class RedisChatsServiceTests
     public async Task GetChatMessagesAsync_WhenOwned_ReturnsDeserializedMessages()
     {
         // Arrange
-        var score = TestValues.NewSortedSetScore();
+        var score = Generated.NewSortedSetScore();
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
             .ReturnsAsync(score);
 
-        var userText = TestValues.NewMessageText();
-        var assistantText = TestValues.NewMessageText();
+        var userText = Generated.NewMessageText();
+        var assistantText = Generated.NewMessageText();
         var msg1 = JsonSerializer.Serialize(new ChatHistoryMessage(RedisChatsService.UserRole, userText), WebJsonOptions);
         var msg2 = JsonSerializer.Serialize(new ChatHistoryMessage(RedisChatsService.AssistantRole, assistantText), WebJsonOptions);
         _databaseMock
@@ -239,23 +234,15 @@ public sealed class RedisChatsServiceTests
 
         Assert.Collection(
             result,
-            user =>
-            {
-                Assert.Equal(RedisChatsService.UserRole, user.Role);
-                Assert.Equal(userText, user.Text);
-            },
-            assistant =>
-            {
-                Assert.Equal(RedisChatsService.AssistantRole, assistant.Role);
-                Assert.Equal(assistantText, assistant.Text);
-            });
+            user => Assert.Equal((RedisChatsService.UserRole, userText), (user.Role, user.Text)),
+            assistant => Assert.Equal((RedisChatsService.AssistantRole, assistantText), (assistant.Role, assistant.Text)));
     }
 
     [Fact]
     public async Task UpdateChatTitleAsync_WhenOwned_UpdatesHashField()
     {
         // Arrange
-        var score = TestValues.NewSortedSetScore();
+        var score = Generated.NewSortedSetScore();
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
             .ReturnsAsync(score);
@@ -268,7 +255,7 @@ public sealed class RedisChatsServiceTests
                 It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
 
-        var renamedChatTitle = TestValues.NewChatTitle();
+        var renamedChatTitle = Generated.NewChatTitle();
 
         // Act
         await _service.UpdateChatTitleAsync(TestEmail, TestChatId, renamedChatTitle, TestContext.Current.CancellationToken);
@@ -290,7 +277,7 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.SortedSetRemoveAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
             .ReturnsAsync(true);
@@ -323,12 +310,12 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetRangeByRankAsync(ChatsKey, 0, -1, Order.Descending, CommandFlags.None))
-            .ReturnsAsync([TestValues.NewNonGuidSortedSetMember(), RedisChatsService.ChatMember(NewestChatId)]);
+            .ReturnsAsync([Generated.NewNonGuidSortedSetMember(), RedisChatsService.ChatMember(NewestChatId)]);
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(NewestChatId), CommandFlags.None))
             .ReturnsAsync([
-                new HashEntry(RedisChatsService.TitleField, TestValues.NewChatTitle()),
-                new HashEntry(RedisChatsService.CreatedAtField, TestValues.NewUnixSeconds())]);
+                new HashEntry(RedisChatsService.TitleField, Generated.NewChatTitle()),
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);
@@ -347,7 +334,7 @@ public sealed class RedisChatsServiceTests
 
         // Act
         var exception = await Record.ExceptionAsync(
-            () => _service.CompleteChatAsync(TestEmail, TestChatId, TestValues.NewMessageText(), TestContext.Current.CancellationToken));
+            () => _service.CompleteChatAsync(TestEmail, TestChatId, Generated.NewMessageText(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<KeyNotFoundException>(exception);
@@ -359,12 +346,12 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(TestChatId), CommandFlags.None))
             .ReturnsAsync([
                 new HashEntry(RedisChatsService.TitleField, string.Empty),
-                new HashEntry(RedisChatsService.CreatedAtField, TestValues.NewUnparseableTimestamp())]);
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnparseableTimestamp())]);
 
         // Act
         var result = await _service.GetChatAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);
@@ -380,8 +367,8 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
-        var validText = TestValues.NewMessageText();
+            .ReturnsAsync(Generated.NewSortedSetScore());
+        var validText = Generated.NewMessageText();
         var valid = JsonSerializer.Serialize(new ChatHistoryMessage(RedisChatsService.UserRole, validText), WebJsonOptions);
         var deserializesToNull = JsonSerializer.Serialize<ChatHistoryMessage?>(null, WebJsonOptions);
         _databaseMock
@@ -400,7 +387,7 @@ public sealed class RedisChatsServiceTests
     public void StreamChatAsync_WhenInputProvided_ReturnsEnumerator()
     {
         // Act
-        var stream = _service.StreamChatAsync(TestEmail, TestChatId, TestValues.NewMessageText(), TestContext.Current.CancellationToken);
+        var stream = _service.StreamChatAsync(TestEmail, TestChatId, Generated.NewMessageText(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(stream);
@@ -412,23 +399,23 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         var userMsg = JsonSerializer.Serialize(
-            new ChatHistoryMessage(RedisChatsService.UserRole, TestValues.NewMessageText()), WebJsonOptions);
+            new ChatHistoryMessage(RedisChatsService.UserRole, Generated.NewMessageText()), WebJsonOptions);
         var assistantMsg = JsonSerializer.Serialize(
-            new ChatHistoryMessage(RedisChatsService.AssistantRole, TestValues.NewMessageText()), WebJsonOptions);
+            new ChatHistoryMessage(RedisChatsService.AssistantRole, Generated.NewMessageText()), WebJsonOptions);
         _databaseMock
             .Setup(d => d.ListRangeAsync(RedisChatsService.ChatMessagesKey(TestChatId), 0, -1, CommandFlags.None))
             .ReturnsAsync([(RedisValue)userMsg, (RedisValue)assistantMsg]);
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException(TestValues.NewFailureReason()));
+            .ThrowsAsync(new InvalidOperationException(Generated.NewFailureReason()));
         var service = CreateService(openAi.Object);
 
         // Act
         var exception = await Record.ExceptionAsync(
-            () => service.CompleteChatAsync(TestEmail, TestChatId, TestValues.NewMessageText(), TestContext.Current.CancellationToken));
+            () => service.CompleteChatAsync(TestEmail, TestChatId, Generated.NewMessageText(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -439,8 +426,10 @@ public sealed class RedisChatsServiceTests
     public async Task CreateChatAsync_AddsToChatsSortedSetAndHashMeta()
     {
         // Arrange
+        HashEntry[] written = [];
         _databaseMock
             .Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<HashEntry[]>(), CommandFlags.None))
+            .Callback<RedisKey, HashEntry[], CommandFlags>((_, entries, _) => written = entries)
             .Returns(Task.CompletedTask);
         _databaseMock
             .Setup(d => d.SortedSetAddAsync(ChatsKey, It.IsAny<RedisValue>(), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
@@ -453,6 +442,8 @@ public sealed class RedisChatsServiceTests
         Assert.NotEqual(Guid.Empty, chat.ChatId);
         Assert.Null(chat.Title);
         Assert.True(chat.CreatedAt > 0);
+        var onlyField = Assert.Single(written);
+        Assert.Equal(RedisChatsService.CreatedAtField, onlyField.Name.ToString());
         _databaseMock.Verify(
             d => d.HashSetAsync(
                 It.Is<RedisKey>(k => string.Equals(
@@ -469,13 +460,13 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.ListRangeAsync(RedisChatsService.ChatMessagesKey(TestChatId), 0, -1, CommandFlags.None))
             .ReturnsAsync([]);
         _databaseMock
             .Setup(d => d.ListRightPushAsync(RedisChatsService.ChatMessagesKey(TestChatId), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewRedisListLength());
+            .ReturnsAsync(Generated.NewRedisListLength());
         _databaseMock
             .Setup(d => d.SortedSetAddAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
             .ReturnsAsync(true);
@@ -487,8 +478,8 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.HashSetAsync(RedisChatsService.ChatMetaKey(TestChatId), (RedisValue)RedisChatsService.TitleField, It.IsAny<RedisValue>(), It.IsAny<When>(), CommandFlags.None))
             .ReturnsAsync(true);
 
-        var input = TestValues.NewMessageText();
-        var expectedOutput = TestValues.NewMessageText();
+        var input = Generated.NewMessageText();
+        var expectedOutput = Generated.NewMessageText();
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
@@ -502,11 +493,9 @@ public sealed class RedisChatsServiceTests
         // Assert
         Assert.Equal(TestChatId, resultChatId);
         Assert.Equal(expectedOutput, outputText);
-        // Assert
         _databaseMock.Verify(
             d => d.ListRightPushAsync(RedisChatsService.ChatMessagesKey(TestChatId), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
             Times.Once);
-        // Assert
         _databaseMock.Verify(
             d => d.HashSetAsync(RedisChatsService.ChatMetaKey(TestChatId), (RedisValue)RedisChatsService.TitleField, (RedisValue)input, It.IsAny<When>(), CommandFlags.None),
             Times.Once);
@@ -518,7 +507,7 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.ListRangeAsync(RedisChatsService.ChatMessagesKey(TestChatId), 0, -1, CommandFlags.None))
             .ReturnsAsync([]);
@@ -531,7 +520,7 @@ public sealed class RedisChatsServiceTests
 
         // Act
         var exception = await Record.ExceptionAsync(
-            () => service.CompleteChatAsync(TestEmail, TestChatId, TestValues.NewMessageText(), TestContext.Current.CancellationToken));
+            () => service.CompleteChatAsync(TestEmail, TestChatId, Generated.NewMessageText(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -543,13 +532,13 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.ListRangeAsync(RedisChatsService.ChatMessagesKey(TestChatId), 0, -1, CommandFlags.None))
             .ReturnsAsync([]);
         _databaseMock
             .Setup(d => d.ListRightPushAsync(RedisChatsService.ChatMessagesKey(TestChatId), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewRedisListLength());
+            .ReturnsAsync(Generated.NewRedisListLength());
         _databaseMock
             .Setup(d => d.SortedSetAddAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), It.IsAny<double>(), It.IsAny<SortedSetWhen>(), CommandFlags.None))
             .ReturnsAsync(true);
@@ -560,9 +549,9 @@ public sealed class RedisChatsServiceTests
             .Setup(d => d.HashSetAsync(RedisChatsService.ChatMetaKey(TestChatId), (RedisValue)RedisChatsService.TitleField, It.IsAny<RedisValue>(), It.IsAny<When>(), CommandFlags.None))
             .ReturnsAsync(true);
 
-        var input = TestValues.NewMessageText();
-        var firstDelta = TestValues.NewMessageText();
-        var secondDelta = TestValues.NewMessageText();
+        var input = Generated.NewMessageText();
+        var firstDelta = Generated.NewMessageText();
+        var secondDelta = Generated.NewMessageText();
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseStreamingAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
@@ -577,11 +566,9 @@ public sealed class RedisChatsServiceTests
 
         // Assert
         Assert.Equal([firstDelta, secondDelta], deltas);
-        // Assert
         _databaseMock.Verify(
             d => d.ListRightPushAsync(RedisChatsService.ChatMessagesKey(TestChatId), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
             Times.Once);
-        // Assert
         _databaseMock.Verify(
             d => d.HashSetAsync(RedisChatsService.ChatMetaKey(TestChatId), (RedisValue)RedisChatsService.TitleField, (RedisValue)input, It.IsAny<When>(), CommandFlags.None),
             Times.Once);
@@ -593,7 +580,7 @@ public sealed class RedisChatsServiceTests
         // Arrange
         _databaseMock
             .Setup(d => d.SortedSetScoreAsync(ChatsKey, RedisChatsService.ChatMember(TestChatId), CommandFlags.None))
-            .ReturnsAsync(TestValues.NewSortedSetScore());
+            .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.ListRangeAsync(RedisChatsService.ChatMessagesKey(TestChatId), 0, -1, CommandFlags.None))
             .ReturnsAsync([]);
@@ -606,15 +593,16 @@ public sealed class RedisChatsServiceTests
 
         // Act
         var deltas = await DrainAsync(
-            service.StreamChatAsync(TestEmail, TestChatId, TestValues.NewMessageText(), TestContext.Current.CancellationToken));
+            service.StreamChatAsync(TestEmail, TestChatId, Generated.NewMessageText(), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Empty(deltas);
-        // Assert
         _databaseMock.Verify(
             d => d.ListRightPushAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue[]>(), It.IsAny<When>(), CommandFlags.None),
             Times.Never);
     }
+
+    public void Dispose() => _telemetry.Dispose();
 
     private static Task InvokeOwnershipRequiredAsync(
         OwnershipRequiredOperation operation,
@@ -629,7 +617,7 @@ public sealed class RedisChatsServiceTests
             OwnershipRequiredOperation.GetChatMessages =>
                 service.GetChatMessagesAsync(TestEmail, TestChatId, cancellationToken),
             OwnershipRequiredOperation.UpdateChatTitle =>
-                service.UpdateChatTitleAsync(TestEmail, TestChatId, TestValues.NewChatTitle(), cancellationToken),
+                service.UpdateChatTitleAsync(TestEmail, TestChatId, Generated.NewChatTitle(), cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(operation)),
         };
 
@@ -646,11 +634,10 @@ public sealed class RedisChatsServiceTests
 
     private static ResponseResult BuildEmptyResponse() => new()
     {
-        Id = TestValues.NewResponseId(),
-        CreatedAt = DateTimeOffset.FromUnixTimeSeconds(TestValues.NewUnixSeconds()),
+        Id = Generated.NewResponseId(),
+        CreatedAt = DateTimeOffset.FromUnixTimeSeconds(Generated.NewUnixSeconds()),
         Status = ResponseStatus.Completed,
-        Model = TestValues.NewModelName(),
-        ParallelToolCallsEnabled = false,
+        Model = Generated.NewModelName(),
     };
 
     private static ResponseResult BuildResponse(string outputText)
@@ -665,7 +652,7 @@ public sealed class RedisChatsServiceTests
         var services = new ServiceCollection();
         services.AddHybridCache();
         var hybridCache = services.BuildServiceProvider().GetRequiredService<HybridCache>();
-        return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration);
+        return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration, _telemetry);
     }
 
     private sealed class FakeStreamingResult(params StreamingResponseUpdate[] updates)

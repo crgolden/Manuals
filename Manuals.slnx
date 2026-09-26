@@ -8,6 +8,7 @@
     <File Path="README.md" />
     <File Path="TESTING.md" />
   </Folder>
+  <Project Path="Manuals.Tests.Integration/Manuals.Tests.Integration.csproj" />
   <Project Path="Manuals.Tests.Unit/Manuals.Tests.Unit.csproj" />
   <Project Path="Manuals/Manuals.csproj" />
 </Solution>

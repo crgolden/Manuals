@@ -2,10 +2,26 @@ namespace Manuals;
 
 using System.Diagnostics;
 
-public static class Telemetry
+public sealed class Telemetry : IDisposable
 {
-    public static readonly ActivitySource ActivitySource = new(nameof(Manuals), "1.0.0");
+    public const string SourceName = nameof(Manuals);
 
-    public static Activity? StartActivity(string name) =>
-        ActivitySource.StartActivity(name, ActivityKind.Internal);
+    public const string ChatIdTag = "chat.id";
+
+    public const string UserIdTag = "user.id";
+
+    public const string AiModelTag = "ai.model";
+
+    public const string ChatCountTag = "chat_count";
+
+    public const string MessageCountTag = "message_count";
+
+    public const string VerifiedTag = "verified";
+
+    private readonly ActivitySource _activitySource = new(SourceName, typeof(Telemetry).Assembly.GetName().Version?.ToString());
+
+    public Activity? StartActivity(string name) =>
+        _activitySource.StartActivity(name);
+
+    public void Dispose() => _activitySource.Dispose();
 }

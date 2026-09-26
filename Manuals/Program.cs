@@ -1,5 +1,3 @@
-#pragma warning disable SA1200
-#pragma warning disable OPENAI001
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Diagnostics;
@@ -25,7 +23,6 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using StackExchange.Redis;
-#pragma warning restore SA1200
 
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateBootstrapLogger();
 
@@ -46,7 +43,8 @@ try
     var configurationOptions = new ConfigurationOptions
     {
         Ssl = redisSsl,
-        EndPoints = [redisEndpoint]
+        EndPoints = [redisEndpoint],
+        DefaultDatabase = builder.Configuration.GetRequired<int>(RedisSettingKeys.Database)
     };
     configurationOptions.Password = builder.Configuration.GetRequired<string>("RedisPassword");
     configurationOptions.AbortOnConnectFail = false;
@@ -108,7 +106,7 @@ try
                 .SetSampler(new AlwaysOnSampler())
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddSource(nameof(Manuals))
+                .AddSource(Telemetry.SourceName)
                 .AddRedisInstrumentation()
                 .AddOtlpExporter(o => o.Endpoint = new Uri(builder.Configuration.GetRequired<string>("AlloyEndpoint"))))
             .Services
@@ -120,11 +118,6 @@ try
     }
     else
     {
-        if (builder.Environment.IsDevelopment())
-        {
-            builder.Configuration.AddUserSecrets("4b268de6-5012-41fa-b8f6-254b6d08b380");
-        }
-
         var openAIApiKey = builder.Configuration.GetRequired<string>("OpenAIApiKey");
         var apiKeyCredential = new ApiKeyCredential(openAIApiKey);
         responsesClient = new ResponsesClient(apiKeyCredential, responsesClientOptions);
@@ -147,6 +140,7 @@ try
     });
     builder.Services.AddHybridCache();
     builder.Services.AddSingleton(responsesClient);
+    builder.Services.AddSingleton<Telemetry>();
     builder.Services.AddScoped<IChatsService, RedisChatsService>();
     builder.Services.AddControllers(options =>
     {
@@ -232,4 +226,3 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
-#pragma warning restore OPENAI001

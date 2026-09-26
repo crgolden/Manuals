@@ -23,15 +23,6 @@
           "Microsoft.TestPlatform.TestHost": "18.10.0"
         }
       },
-      "Moq": {
-        "type": "Direct",
-        "requested": "[4.20.72, )",
-        "resolved": "4.20.72",
-        "contentHash": "EA55cjyNn8eTNWrgrdZJH5QLFp2L43oxl1tlkoYUKIE9pRwL784OWiTXeCV5ApS+AMYEAlt7Fo03A2XfouvHmQ==",
-        "dependencies": {
-          "Castle.Core": "5.1.1"
-        }
-      },
       "Shared": {
         "type": "Direct",
         "requested": "[1.5.0, )",
@@ -142,14 +133,6 @@
         "dependencies": {
           "Azure.Core": "1.47.3",
           "System.IO.Hashing": "8.0.0"
-        }
-      },
-      "Castle.Core": {
-        "type": "Transitive",
-        "resolved": "5.1.1",
-        "contentHash": "rpYtIczkzGpf+EkZgDr9CClTdemhsrwA/W5hMoPjLkRFnXzH44zDLoovXeKtmxb1ykXK9aJVODSpiJml8CTw2g==",
-        "dependencies": {
-          "System.Diagnostics.EventLog": "6.0.0"
         }
       },
       "Elastic.Channels": {

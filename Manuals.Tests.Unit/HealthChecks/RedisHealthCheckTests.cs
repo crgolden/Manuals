@@ -4,12 +4,11 @@ using Manuals.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Moq;
 using StackExchange.Redis;
-using TestSupport;
 
 [Trait("Category", "Unit")]
 public sealed class RedisHealthCheckTests
 {
-    private static readonly int PingLatencyMilliseconds = TestValues.NewLatencyMilliseconds();
+    private static readonly int PingLatencyMilliseconds = Generated.NewLatencyMilliseconds();
     private static readonly TimeSpan PingLatency = TimeSpan.FromMilliseconds(PingLatencyMilliseconds);
 
     [Fact]
@@ -34,7 +33,7 @@ public sealed class RedisHealthCheckTests
     public async Task CheckHealthAsync_ReturnsUnhealthyWithLastException_WhenRedisIsUnreachable()
     {
         // Arrange
-        var expected = new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, TestValues.NewFailureReason());
+        var expected = new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, Generated.NewFailureReason());
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database.Setup(d => d.PingAsync(It.IsAny<CommandFlags>())).ThrowsAsync(expected);
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
@@ -57,7 +56,7 @@ public sealed class RedisHealthCheckTests
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database
             .Setup(d => d.PingAsync(It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, TestValues.NewFailureReason()));
+            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, Generated.NewFailureReason()));
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
 
         // Act
@@ -76,7 +75,7 @@ public sealed class RedisHealthCheckTests
         var database = new Mock<IDatabase>(MockBehavior.Strict);
         database
             .SetupSequence(d => d.PingAsync(It.IsAny<CommandFlags>()))
-            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, TestValues.NewFailureReason()))
+            .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, CommandFlags.None, Generated.NewFailureReason()))
             .ReturnsAsync(PingLatency);
         var healthCheck = new RedisHealthCheck(CreateMultiplexer(database).Object);
 

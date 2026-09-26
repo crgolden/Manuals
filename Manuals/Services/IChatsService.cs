@@ -1,6 +1,6 @@
 namespace Manuals.Services;
 
-using Models;
+using Manuals.Models;
 
 public interface IChatsService
 {

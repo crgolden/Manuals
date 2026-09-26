@@ -144,6 +144,15 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 3. Logs in to Azure via OIDC and runs integration tests (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
 4. Publishes the web app (`-r win-x86 --self-contained false`) and uploads the artifact
 
+The integration step reads its configuration from repository variables and secrets named by the SCREAMING_SNAKE_CASE of each key (`OPENAI_INSTRUCTIONS` for `OpenAIInstructions`, and so on). Two variables exist only for the test prompts, which are configuration rather than test code:
+
+| Repository variable | Configuration key |
+|---|---|
+| `INTEGRATION_PROMPTS_MANUAL_REQUEST_FORMAT` | `IntegrationPrompts:ManualRequestFormat` (composite format; `{0}` is the product model) |
+| `INTEGRATION_PROMPTS_RECALL_PRODUCT` | `IntegrationPrompts:RecallProduct` |
+
+Their local values live in `Manuals/appsettings.Development.json`; see [TESTING.md](TESTING.md#integration-tests).
+
 **Deploy job** — runs after a successful build on `main`:
 1. Deploys the web app to **Azure App Service (Windows, F1)** via Azure OIDC
 

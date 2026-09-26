@@ -1,127 +1,96 @@
-namespace Manuals.Tests.Unit.E2E;
+namespace Manuals.Tests.Integration;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
-using Infrastructure;
-using Manuals.Services;
+using Manuals.Controllers;
+using Manuals.Models;
+using Manuals.Tests.Integration.Infrastructure;
+using Manuals.Tests.Integration.TestSupport;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Models;
-using StackExchange.Redis;
 
 [Collection(IntegrationIdentityConstants.CollectionName)]
 [Trait("Category", "Integration")]
-public sealed class IntegrationChatsTests : IAsyncDisposable
+public sealed class IntegrationChatsTests : IDisposable
 {
     private readonly HttpClient _client;
-    private readonly IDatabase _database;
-    private readonly List<Guid> _createdChatIds = [];
+    private readonly IntegrationPrompts _prompts;
 
     public IntegrationChatsTests(ManualsWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
-        _database = factory.Services.GetRequiredService<IDatabase>();
+        _prompts = IntegrationPrompts.From(factory.Services.GetRequiredService<IConfiguration>());
     }
 
     [Fact]
     public async Task RealOpenAICompletionResponds()
     {
-        // Arrange
         var chat = await CreateChatAsync();
-        _createdChatIds.Add(chat.ChatId);
+        var anyUserMessage = Generated.NewDescription();
 
-        // Act
         var response = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("Can you help me find the manual for an LG OLED TV?"),
+            new ChatRequest(anyUserMessage),
             cancellationToken: TestContext.Current.CancellationToken);
 
-        // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result?.Output);
-        Assert.False(string.IsNullOrWhiteSpace(result.Output), "Expected a non-empty response from the completion endpoint.");
+        Assert.False(string.IsNullOrWhiteSpace(result.Output));
     }
 
     [Fact]
     public async Task RealOpenAIStreamingResponds()
     {
-        // Arrange
         var chat = await CreateChatAsync();
-        _createdChatIds.Add(chat.ChatId);
 
-        // Act
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"/chats/{chat.ChatId}/messages/stream")
-        {
-            Content = new StringContent(
-                JsonSerializer.Serialize(new ChatRequest("Say exactly: hello")),
-                Encoding.UTF8,
-                "application/json"),
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/chats/{chat.ChatId}/messages/stream");
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new ChatRequest(_prompts.ManualRequest(Generated.NewProductModel()))),
+            Encoding.UTF8,
+            MediaTypeNames.Application.Json);
         using var streamResponse = await _client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, streamResponse.StatusCode);
-        Assert.Equal("text/event-stream", streamResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(MediaTypeNames.Text.EventStream, streamResponse.Content.Headers.ContentType?.MediaType);
 
         var body = await streamResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        Assert.Contains("data:", body, StringComparison.Ordinal);
-        Assert.Contains("[DONE]", body, StringComparison.Ordinal);
+        Assert.Contains(ChatsController.SseDataPrefix, body, StringComparison.Ordinal);
+        Assert.Contains(ChatsController.SseDoneToken, body, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task ConversationHistoryIsPreserved()
     {
-        // Arrange
         var chat = await CreateChatAsync();
-        _createdChatIds.Add(chat.ChatId);
 
+        var productModel = Generated.NewProductModel();
         var first = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("I need the manual for the Samsung QN90B TV."),
+            new ChatRequest(_prompts.ManualRequest(productModel)),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
-        // Act
         var second = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest("What product did I just say I need a manual for? Reply with only the product name."),
+            new ChatRequest(_prompts.RecallProduct),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         var result = await second.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result?.Output);
-        Assert.Contains("QN90B", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(productModel, result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var chatId in _createdChatIds)
-        {
-            await _database.KeyDeleteAsync(
-                [RedisChatsService.ChatMetaKey(chatId), RedisChatsService.ChatMessagesKey(chatId)]);
-
-            await _database.KeyDeleteAsync(L2Key(RedisChatsService.ChatMessagesCacheKey(chatId)));
-        }
-
-        await _database.SortedSetRemoveRangeByScoreAsync(
-            RedisChatsService.ChatsKey(ManualsWebApplicationFactory.TestUserId),
-            double.NegativeInfinity,
-            double.PositiveInfinity);
-
-        await _database.KeyDeleteAsync(
-            L2Key(RedisChatsService.ChatListCacheKey(ManualsWebApplicationFactory.TestUserId)));
-    }
-
-    private static string L2Key(string cacheKey) => $"{RedisChatsService.CacheInstanceName}{cacheKey}";
+    public void Dispose() => _client.Dispose();
 
     private async Task<Chat> CreateChatAsync()
     {

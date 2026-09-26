@@ -1,21 +1,22 @@
 namespace Manuals.Tests.Unit;
 
 using System.Diagnostics;
-using TestSupport;
 
 [Trait("Category", "Unit")]
-public sealed class TelemetryTests
+public sealed class TelemetryTests : IDisposable
 {
+    private readonly Telemetry _telemetry = new();
+
     [Fact]
     public void StartActivity_AttachesToTheRequestThatCausedIt()
     {
         // Arrange
         using var listener = ListenToManuals();
-        using var request = new ActivitySource(nameof(Manuals))
-            .StartActivity(TestValues.NewRequestActivityName(), ActivityKind.Server);
+        using var request = new ActivitySource(Telemetry.SourceName)
+            .StartActivity(Generated.NewRequestActivityName(), ActivityKind.Server);
 
         // Act
-        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
+        using var work = _telemetry.StartActivity(Generated.NewWorkActivityName());
 
         // Assert
         Assert.Equal(request?.SpanId, work?.ParentSpanId);
@@ -26,11 +27,11 @@ public sealed class TelemetryTests
     {
         // Arrange
         using var listener = ListenToManuals();
-        using var request = new ActivitySource(nameof(Manuals))
-            .StartActivity(TestValues.NewRequestActivityName(), ActivityKind.Server);
+        using var request = new ActivitySource(Telemetry.SourceName)
+            .StartActivity(Generated.NewRequestActivityName(), ActivityKind.Server);
 
         // Act
-        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
+        using var work = _telemetry.StartActivity(Generated.NewWorkActivityName());
 
         // Assert
         Assert.Equal(request?.TraceId, work?.TraceId);
@@ -43,7 +44,7 @@ public sealed class TelemetryTests
         using var listener = ListenToManuals();
 
         // Act
-        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
+        using var work = _telemetry.StartActivity(Generated.NewWorkActivityName());
 
         // Assert
         Assert.NotNull(work);
@@ -56,18 +57,20 @@ public sealed class TelemetryTests
         using var listener = ListenToManuals();
 
         // Act
-        using var work = Telemetry.StartActivity(TestValues.NewWorkActivityName());
+        using var work = _telemetry.StartActivity(Generated.NewWorkActivityName());
 
         // Assert
         Assert.Null(work?.Parent);
     }
 
+    public void Dispose() => _telemetry.Dispose();
+
     private static ActivityListener ListenToManuals()
     {
         var listener = new ActivityListener
         {
-            ShouldListenTo = source => string.Equals(source.Name, nameof(Manuals), StringComparison.Ordinal),
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ShouldListenTo = source => string.Equals(source.Name, Telemetry.SourceName, StringComparison.Ordinal),
+            Sample = (ref _) => ActivitySamplingResult.AllDataAndRecorded,
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
