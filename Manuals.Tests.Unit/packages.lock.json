@@ -34,9 +34,9 @@
       },
       "Shared": {
         "type": "Direct",
-        "requested": "[1.5.0, )",
-        "resolved": "1.5.0",
-        "contentHash": "B0+JrWPlBmZf2cEwvAG4yUFAPJCuaKTKbyBJiyQkCUlqzJmjFhv9XltDztKPCyNa8VuSUBgQfJEpwAYej6C0gw==",
+        "requested": "[1.5.1, )",
+        "resolved": "1.5.1",
+        "contentHash": "FQoXImDqgqeSlQXWcW2L85ZtgKdq6ajb/xGMNA2UWhXLudbYSnQhZAUj0MOJcYSNTHn8aRhsIVNMYeGiGpyeIA==",
         "dependencies": {
           "OpenTelemetry.Instrumentation.AspNetCore": "1.19.0"
         }
@@ -1066,7 +1066,7 @@
           "Serilog.AspNetCore": "[10.0.0, )",
           "Serilog.Enrichers.Environment": "[3.0.1, )",
           "Serilog.Sinks.Console": "[6.1.1, )",
-          "Shared": "[1.5.0, )",
+          "Shared": "[1.5.1, )",
           "StackExchange.Redis": "[3.3.1, )"
         }
       }
