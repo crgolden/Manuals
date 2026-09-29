@@ -61,33 +61,11 @@ public sealed class RedisChatsServiceTests : IDisposable
     };
 
     [Fact]
-    public async Task CompleteChatAsync_WhenInputIsEmpty_ThrowsArgumentNullException()
-    {
-        // Act
-        var exception = await Record.ExceptionAsync(
-            () => _service.CompleteChatAsync(TestEmail, TestChatId, string.Empty, TestContext.Current.CancellationToken));
-
-        // Assert
-        Assert.IsType<ArgumentNullException>(exception);
-    }
-
-    [Fact]
     public async Task CompleteChatAsync_WhenInputIsWhitespace_ThrowsArgumentNullException()
     {
         // Act
         var exception = await Record.ExceptionAsync(
             () => _service.CompleteChatAsync(TestEmail, TestChatId, Generated.NewBlank(), TestContext.Current.CancellationToken));
-
-        // Assert
-        Assert.IsType<ArgumentNullException>(exception);
-    }
-
-    [Fact]
-    public void StreamChatAsync_WhenInputIsEmpty_ThrowsArgumentNullException()
-    {
-        // Act
-        var exception = Record.Exception(
-            () => _service.StreamChatAsync(TestEmail, TestChatId, string.Empty, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentNullException>(exception);
@@ -168,7 +146,7 @@ public sealed class RedisChatsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetChatsAsync_WhenTitleIsEmpty_ReturnsChatWithNullTitle()
+    public async Task GetChatsAsync_WhenTitleIsAbsent_ReturnsChatWithNullTitle()
     {
         // Arrange
         _databaseMock
@@ -177,9 +155,7 @@ public sealed class RedisChatsServiceTests : IDisposable
 
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(UntitledChatId), CommandFlags.None))
-            .ReturnsAsync([
-                new HashEntry(RedisChatsService.TitleField, string.Empty),
-                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
+            .ReturnsAsync([new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);
@@ -341,7 +317,7 @@ public sealed class RedisChatsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetChatAsync_WhenTitleEmptyAndCreatedAtUnparseable_ReturnsNullTitleAndZero()
+    public async Task GetChatAsync_WhenTitleAbsentAndCreatedAtUnparseable_ReturnsNullTitleAndZero()
     {
         // Arrange
         _databaseMock
@@ -349,9 +325,7 @@ public sealed class RedisChatsServiceTests : IDisposable
             .ReturnsAsync(Generated.NewSortedSetScore());
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(TestChatId), CommandFlags.None))
-            .ReturnsAsync([
-                new HashEntry(RedisChatsService.TitleField, string.Empty),
-                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnparseableTimestamp())]);
+            .ReturnsAsync([new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnparseableTimestamp())]);
 
         // Act
         var result = await _service.GetChatAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);

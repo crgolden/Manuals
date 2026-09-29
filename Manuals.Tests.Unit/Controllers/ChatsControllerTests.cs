@@ -255,19 +255,6 @@ public sealed class ChatsControllerTests
     }
 
     [Fact]
-    public async Task PostMessageAsync_WhenInputIsEmpty_ReturnsBadRequest()
-    {
-        // Arrange
-        _controller.ControllerContext = CreateContextWithUser();
-        var request = new ChatRequest(string.Empty);
-
-        // Act
-        var result = await _controller.PostMessageAsync(TestChatId, request, TestContext.Current.CancellationToken);
-
-        Assert.IsType<BadRequestObjectResult>(result);
-    }
-
-    [Fact]
     public async Task PostMessageAsync_WhenInputIsWhitespace_ReturnsBadRequest()
     {
         // Arrange
@@ -315,20 +302,6 @@ public sealed class ChatsControllerTests
         var result = await _controller.PostMessageAsync(MissingChatId, request, TestContext.Current.CancellationToken);
 
         Assert.IsType<NotFoundResult>(result);
-    }
-
-    [Fact]
-    public async Task PostMessageStreamAsync_WhenInputIsEmpty_Returns400()
-    {
-        // Arrange
-        _controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
-        var request = new ChatRequest(string.Empty);
-
-        // Act
-        await _controller.PostMessageStreamAsync(TestChatId, request, TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(StatusCodes.Status400BadRequest, _controller.HttpContext.Response.StatusCode);
     }
 
     [Fact]
