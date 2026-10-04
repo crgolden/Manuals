@@ -61,26 +61,19 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 |---|---|
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
 | Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production |
-| Redis instance | Managed or self-hosted; local for development |
+| Redis instance | Self-hosted; locally, Redis in WSL 2 at `localhost:6379` |
 
 ## Getting Started
 
 ### 1. Configure User Secrets
 
 ```powershell
-dotnet user-secrets set "OidcAuthority" "https://localhost:7261" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIEndpoint" "https://<your-resource>.openai.azure.com/" --project Manuals/Manuals.csproj
 dotnet user-secrets set "OpenAIApiKey" "<your-api-key>" --project Manuals/Manuals.csproj
-dotnet user-secrets set "OpenAIModel" "gpt-4o-mini" --project Manuals/Manuals.csproj
-dotnet user-secrets set "OpenAIInstructions" "You are a helpful assistant." --project Manuals/Manuals.csproj
-dotnet user-secrets set "OpenAIMaxOutputTokenCount" "4096" --project Manuals/Manuals.csproj
-dotnet user-secrets set "RedisHost" "<your-redis-host>" --project Manuals/Manuals.csproj
-dotnet user-secrets set "RedisPort" "6380" --project Manuals/Manuals.csproj
-dotnet user-secrets set "RedisSsl" "true" --project Manuals/Manuals.csproj
-dotnet user-secrets set "RedisPassword" "<your-redis-password>" --project Manuals/Manuals.csproj
+dotnet user-secrets set "RedisPassword" "<your-local-redis-requirepass>" --project Manuals/Manuals.csproj
 ```
 
-> The values above are examples. The effective `OpenAIModel` and `OpenAIMaxOutputTokenCount` are environment-specific — they differ between local development, the CI integration-test run, and production (sourced from Azure App Service settings and Key Vault).
+> These are the three keys `Manuals/appsettings.Development.json` leaves null. Every other local value, including `RedisHost`/`RedisPort`/`RedisSsl` (`localhost:6379`, no TLS) and `OidcAuthority`, comes from that file, and a User Secret of the same name overrides it. CI and production take their values from repository variables and from App Service settings and Key Vault respectively.
 
 ### 2. Run
 
@@ -111,7 +104,8 @@ On the first message sent to a chat, the title is auto-set to the first 60 chara
 
 ```
 Manuals/               # ASP.NET Core 10 API — chat CRUD, OpenAI streaming, Redis persistence
-Manuals.Tests.Unit/         # xUnit v3 — unit tests (Moq) and integration tests against real Azure Redis + OpenAI
+Manuals.Tests.Unit/         # xUnit v3: unit tests (Moq), Category=Unit
+Manuals.Tests.Integration/  # xUnit v3: integration tests against a real Redis with Azure OpenAI stubbed, Category=Integration
 ```
 
 ## Commands
@@ -120,13 +114,15 @@ Manuals.Tests.Unit/         # xUnit v3 — unit tests (Moq) and integration test
 # Build
 dotnet build
 
-# Unit tests only (no Azure required)
+# Unit tests only (no external dependencies)
 dotnet build Manuals.Tests.Unit --configuration Debug
 .\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
 
-# Integration tests (requires live Redis + Azure OpenAI endpoint; no az login needed)
+# Integration tests (WSL Redis with a WSL terminal kept open; Azure OpenAI is stubbed, so no OpenAI key and no az login)
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Integration" -showLiveOutput
+$env:RedisDatabase = "1"
+dotnet build Manuals.Tests.Integration --configuration Debug
+.\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
 
 # Publish
 dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
@@ -141,7 +137,7 @@ The GitHub Actions workflow triggers on pushes to `main` and pull requests.
 **Build job** — runs on every trigger:
 1. Builds the solution (`dotnet build --configuration Release`)
 2. Runs unit tests with coverage
-3. Logs in to Azure via OIDC and runs integration tests (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
+3. Runs integration tests against the self-hosted Redis named by `REDIS_HOST`, with Azure OpenAI stubbed in process and no Azure login (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
 4. Publishes the web app (`-r win-x86 --self-contained false`) and uploads the artifact
 
 The integration step reads its configuration from repository variables and secrets named by the SCREAMING_SNAKE_CASE of each key (`OPENAI_INSTRUCTIONS` for `OpenAIInstructions`, and so on). Two variables exist only for the test prompts, which are configuration rather than test code:

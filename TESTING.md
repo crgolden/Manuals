@@ -1,6 +1,6 @@
 # Testing
 
-The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests** that run on every push with no external dependencies, and **integration tests** that exercise real Azure Redis and Azure OpenAI on every push to `main`.
+The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests** that run on every push with no external dependencies, and **integration tests** that exercise a real Redis through the full HTTP pipeline, with Azure OpenAI replaced by an in-process stub, locally and on every push to `main`. Redis is never Azure Cache for Redis: locally it is Redis in WSL 2 at `localhost:6379`, and in CI it is the self-hosted Redis named by the `REDIS_HOST` repository variable.
 
 For running tests (`dotnet test` from the repo root — never the workspace root) and `ASPNETCORE_ENVIRONMENT` discipline, see the workspace-level [TESTING.md](../AGENTS/TESTING.md).
 
@@ -8,10 +8,10 @@ Unit test coding standards (MockBehavior.Strict, argument verification, SetupSeq
 
 ## Test Tiers
 
-| Tier | Trait | Requires Azure? | Runs in CI |
-|------|-------|-----------------|------------|
-| Unit | `Category=Unit` | No | Every push/PR |
-| Integration | `Category=Integration` | Yes — real Redis + Azure OpenAI (API key from User Secrets; no Azure credentials) | Push to `main` only |
+| Tier | Trait | Requires | Runs in CI |
+|------|-------|----------|------------|
+| Unit | `Category=Unit` | Nothing | Every push/PR |
+| Integration | `Category=Integration` | Real Redis (WSL 2 locally); Azure OpenAI is stubbed, so no OpenAI key and no Azure credentials | Push to `main` only |
 
 `ChatsControllerTests.PostChatAsync_ReturnsCreatedAtActionWithChat` (unit) verifies the shape of the returned `IActionResult` only — calling the action directly bypasses the full HTTP middleware pipeline, so it never exercises `CreatedAtActionResult`'s own route-URL generation. `IntegrationChatsTests`'s `CreateChatAsync` helper is the one place that does: it asserts the `Location` header against a live HTTP response through the real pipeline.
 
@@ -29,7 +29,7 @@ dotnet build Manuals.Tests.Unit --configuration Debug
 Requires a running Redis instance and nothing else outside the service boundary: Azure OpenAI is mocked. Local Redis runs in WSL 2, which stops its VM, and Redis with it, shortly after the last WSL session closes: keep a WSL terminal open for the whole run. The factory replaces the `ResponsesClient` singleton with one whose `HttpClientPipelineTransport` sends to `TestSupport/OpenAIResponsesStub`, which reads each request as the SDK's own `CreateResponseOptions`, records it, and answers with SDK-serialized `ResponseResult` JSON or `response.output_text.delta` server-sent events. The tests assert what Manuals controls: the reply it relays, the deltas it streams, and the conversation history it sends with the next message. `OpenAIEndpoint` and `OpenAIApiKey` are supplied by the factory through host configuration (`CreateHost`), because `Program.cs` reads them before the host is built; no OpenAI key is needed locally or in CI, and no `az login`, since Azure credentials (`DefaultAzureCredential`) are only constructed inside `IsProduction()`.
 
 1. Set `ASPNETCORE_ENVIRONMENT=Development` so the non-production branch of `Program.cs` runs and User Secrets load.
-2. Ensure User Secrets include: `RedisHost`, `RedisPort`, `RedisSsl`, `RedisPassword`, `OpenAIModel`, `OpenAIInstructions`, `OpenAIMaxOutputTokenCount`, `OidcAuthority`.
+2. Ensure User Secrets include `RedisPassword`, the local WSL Redis's `requirepass`. It is the one key the tier reads that neither `Manuals/appsettings.Development.json` nor the factory supplies: `RedisHost`, `RedisPort`, `RedisSsl`, `OidcAuthority`, `OpenAIModel`, `OpenAIInstructions` and `OpenAIMaxOutputTokenCount` come from that file, and `OpenAIEndpoint` and `OpenAIApiKey` from the factory. A User Secret of the same name overrides the file.
 3. The prompts the tests send come from the `IntegrationPrompts` configuration section, never from test code. `TestSupport/IntegrationPrompts.From` binds it and fails, naming the key, when a value is missing or blank.
 
    | Key | Local source | CI source (repo variable) | Shape |
@@ -41,6 +41,7 @@ Requires a running Redis instance and nothing else outside the service boundary:
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:RedisDatabase = "1"
 dotnet build Manuals.Tests.Integration --configuration Debug
 .\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
 
@@ -50,7 +51,7 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### In the local gate
 
-`gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. When `RedisHost` is already in the environment, as in the alert-triage gate, it opens no WSL session and waits for that host and `RedisPort` instead, failing the row if nothing answers. The `Local Redis (WSL) for the integration tier` row decides the tier:
+**On a machine where WSL cannot start, the gate skips the integration tier and runs every other step.** The skip is reported as `SKIPPED`, never as a pass. `gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. When `RedisHost` is already in the environment, as in the alert-triage gate, it opens no WSL session and waits for that host and `RedisPort` instead, failing the row if nothing answers. The `Local Redis (WSL) for the integration tier` row decides the tier:
 
 | What happened | Redis row | Integration tier |
 |---|---|---|

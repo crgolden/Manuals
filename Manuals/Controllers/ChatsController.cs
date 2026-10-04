@@ -19,7 +19,9 @@ public sealed class ChatsController : ControllerBase
 
     internal const string SseDataPrefix = "data: ";
 
-    internal const string SseDoneEvent = $"{SseDataPrefix}{SseDoneToken}\n\n";
+    internal const string SseEventTerminator = "\n\n";
+
+    internal const string SseDoneEvent = $"{SseDataPrefix}{SseDoneToken}{SseEventTerminator}";
 
     private readonly IChatsService _chatsService;
 
@@ -175,5 +177,5 @@ public sealed class ChatsController : ControllerBase
     }
 
     internal static string SseDeltaEvent(string delta) =>
-        $"{SseDataPrefix}{JsonSerializer.Serialize(new { delta = new { content = delta } })}\n\n";
+        $"{SseDataPrefix}{JsonSerializer.Serialize(new { delta = new { content = delta } })}{SseEventTerminator}";
 }

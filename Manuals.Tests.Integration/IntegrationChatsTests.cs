@@ -86,7 +86,7 @@ public sealed class IntegrationChatsTests : IDisposable
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
-        var sentConversation = _openAIStub.Requests.Last().InputItems
+        var sentConversation = _openAIStub.Requests[^1].InputItems
             .OfType<MessageResponseItem>()
             .Select(message => (message.Role, message.Content.Single().Text));
         Assert.Equal(

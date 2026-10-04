@@ -6,15 +6,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Mime;
 using System.Text;
+using Manuals.Controllers;
 using OpenAI;
 using OpenAI.Responses;
 
 public sealed class OpenAIResponsesStub : HttpMessageHandler
 {
-    private const string ServerSentEventDataPrefix = "data: ";
-
-    private const string ServerSentEventTerminator = "\n\n";
-
     private readonly ConcurrentQueue<CreateResponseOptions> _requests = new();
 
     public string ReplyText { get; } = Generated.NewMessageText();
@@ -39,7 +36,7 @@ public sealed class OpenAIResponsesStub : HttpMessageHandler
     }
 
     private static string ServerSentEvent(StreamingResponseUpdate update) =>
-        ServerSentEventDataPrefix + ModelReaderWriter.Write(update, ModelReaderWriterOptions.Json) + ServerSentEventTerminator;
+        ChatsController.SseDataPrefix + ModelReaderWriter.Write(update, ModelReaderWriterOptions.Json) + ChatsController.SseEventTerminator;
 
     private HttpResponseMessage CompletedReply()
     {
