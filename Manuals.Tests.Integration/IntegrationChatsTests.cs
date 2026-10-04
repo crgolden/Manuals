@@ -11,6 +11,7 @@ using Manuals.Tests.Integration.Infrastructure;
 using Manuals.Tests.Integration.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAI.Responses;
 
 [Collection(IntegrationIdentityConstants.CollectionName)]
 [Trait("Category", "Integration")]
@@ -18,15 +19,17 @@ public sealed class IntegrationChatsTests : IDisposable
 {
     private readonly HttpClient _client;
     private readonly IntegrationPrompts _prompts;
+    private readonly OpenAIResponsesStub _openAIStub;
 
     public IntegrationChatsTests(ManualsWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
         _prompts = IntegrationPrompts.From(factory.Services.GetRequiredService<IConfiguration>());
+        _openAIStub = factory.OpenAIStub;
     }
 
     [Fact]
-    public async Task RealOpenAICompletionResponds()
+    public async Task CompletionReturnsTheModelsReply()
     {
         var chat = await CreateChatAsync();
         var anyUserMessage = Generated.NewDescription();
@@ -39,12 +42,11 @@ public sealed class IntegrationChatsTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<ChatResponse>(
             cancellationToken: TestContext.Current.CancellationToken);
-        Assert.NotNull(result?.Output);
-        Assert.False(string.IsNullOrWhiteSpace(result.Output));
+        Assert.Equal(_openAIStub.ReplyText, result?.Output);
     }
 
     [Fact]
-    public async Task RealOpenAIStreamingResponds()
+    public async Task StreamingRelaysEveryDeltaTheModelSends()
     {
         var chat = await CreateChatAsync();
 
@@ -62,19 +64,19 @@ public sealed class IntegrationChatsTests : IDisposable
 
         var body = await streamResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
-        Assert.Contains(ChatsController.SseDataPrefix, body, StringComparison.Ordinal);
-        Assert.Contains(ChatsController.SseDoneToken, body, StringComparison.Ordinal);
+        var relayedStream = string.Concat(_openAIStub.StreamedDeltas.Select(ChatsController.SseDeltaEvent)) + ChatsController.SseDoneEvent;
+        Assert.Equal(relayedStream, body);
     }
 
     [Fact]
-    public async Task ConversationHistoryIsPreserved()
+    public async Task ConversationHistoryIsSentWithTheNextMessage()
     {
         var chat = await CreateChatAsync();
 
-        var productModel = Generated.NewProductModel();
+        var firstMessage = _prompts.ManualRequest(Generated.NewProductModel());
         var first = await _client.PostAsJsonAsync(
             $"/chats/{chat.ChatId}/messages",
-            new ChatRequest(_prompts.ManualRequest(productModel)),
+            new ChatRequest(firstMessage),
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
@@ -84,10 +86,12 @@ public sealed class IntegrationChatsTests : IDisposable
             cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
-        var result = await second.Content.ReadFromJsonAsync<ChatResponse>(
-            cancellationToken: TestContext.Current.CancellationToken);
-        Assert.NotNull(result?.Output);
-        Assert.Contains(productModel, result.Output, StringComparison.OrdinalIgnoreCase);
+        var sentConversation = _openAIStub.Requests.Last().InputItems
+            .OfType<MessageResponseItem>()
+            .Select(message => (message.Role, message.Content.Single().Text));
+        Assert.Equal(
+            [(MessageRole.User, firstMessage), (MessageRole.Assistant, _openAIStub.ReplyText), (MessageRole.User, _prompts.RecallProduct)],
+            sentConversation);
     }
 
     public void Dispose() => _client.Dispose();

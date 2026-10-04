@@ -26,11 +26,11 @@ dotnet build Manuals.Tests.Unit --configuration Debug
 
 ### Integration Tests
 
-Requires a running Redis instance and an Azure OpenAI endpoint. Local Redis runs in WSL 2, which stops its VM, and Redis with it, shortly after the last WSL session closes: keep a WSL terminal open for the whole run. No `az login` needed: in non-production, `Program.cs` uses `ApiKeyCredential` (from `OpenAIApiKey` User Secret) and User Secrets for Redis. Azure credentials (`DefaultAzureCredential`) are only constructed inside `IsProduction()`.
+Requires a running Redis instance and nothing else outside the service boundary: Azure OpenAI is mocked. Local Redis runs in WSL 2, which stops its VM, and Redis with it, shortly after the last WSL session closes: keep a WSL terminal open for the whole run. The factory replaces the `ResponsesClient` singleton with one whose `HttpClientPipelineTransport` sends to `TestSupport/OpenAIResponsesStub`, which reads each request as the SDK's own `CreateResponseOptions`, records it, and answers with SDK-serialized `ResponseResult` JSON or `response.output_text.delta` server-sent events. The tests assert what Manuals controls: the reply it relays, the deltas it streams, and the conversation history it sends with the next message. `OpenAIEndpoint` and `OpenAIApiKey` are supplied by the factory through host configuration (`CreateHost`), because `Program.cs` reads them before the host is built; no OpenAI key is needed locally or in CI, and no `az login`, since Azure credentials (`DefaultAzureCredential`) are only constructed inside `IsProduction()`.
 
 1. Set `ASPNETCORE_ENVIRONMENT=Development` so the non-production branch of `Program.cs` runs and User Secrets load.
-2. Ensure User Secrets include: `RedisHost`, `RedisPort`, `RedisSsl`, `RedisPassword`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIInstructions`, `OpenAIMaxOutputTokenCount`, `OpenAIApiKey`, `OidcAuthority`.
-3. The prompts the tests send the model come from the `IntegrationPrompts` configuration section, never from test code. `TestSupport/IntegrationPrompts.From` binds it and fails, naming the key, when a value is missing or blank.
+2. Ensure User Secrets include: `RedisHost`, `RedisPort`, `RedisSsl`, `RedisPassword`, `OpenAIModel`, `OpenAIInstructions`, `OpenAIMaxOutputTokenCount`, `OidcAuthority`.
+3. The prompts the tests send come from the `IntegrationPrompts` configuration section, never from test code. `TestSupport/IntegrationPrompts.From` binds it and fails, naming the key, when a value is missing or blank.
 
    | Key | Local source | CI source (repo variable) | Shape |
    |---|---|---|---|
@@ -50,7 +50,7 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### In the local gate
 
-`gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. The `Local Redis (WSL) for the integration tier` row decides the tier:
+`gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. When `RedisHost` is already in the environment, as in the alert-triage gate, it opens no WSL session and waits for that host and `RedisPort` instead, failing the row if nothing answers. The `Local Redis (WSL) for the integration tier` row decides the tier:
 
 | What happened | Redis row | Integration tier |
 |---|---|---|
@@ -63,11 +63,11 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### `ManualsWebApplicationFactory`
 
-`WebApplicationFactory<Program>` used by integration tests. Starts the full `Program.cs` with `ASPNETCORE_ENVIRONMENT=Development`, which selects the non-production branch: `ApiKeyCredential` for OpenAI, User Secrets for Redis, ephemeral Data Protection, no Azure credentials. Besides console logging, the only replacement is the authentication scheme: `IntegrationAuthHandler` always authenticates as `sub = ManualsWebApplicationFactory.TestUserId`, a `Guid` generated per run, bypassing JWT validation. The `Manuals` policy under test is `Program.cs`'s own.
+`WebApplicationFactory<Program>` used by integration tests. Starts the full `Program.cs` with `ASPNETCORE_ENVIRONMENT=Development`, which selects the non-production branch: `ApiKeyCredential` for OpenAI, User Secrets for Redis, ephemeral Data Protection, no Azure credentials. Besides console logging, it replaces two things: the `ResponsesClient` (above) and the authentication scheme: `IntegrationAuthHandler` always authenticates as `sub = ManualsWebApplicationFactory.TestUserId`, a `Guid` generated per run, bypassing JWT validation. The `Manuals` policy under test is `Program.cs`'s own.
 
 ### Data Isolation
 
-Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), which the factory requires at start. `ManualsWebApplicationFactory` deletes every key in the connected database in `InitializeAsync` before the first test and in `DisposeAsync` after the last, each time after checking that its number is 1, so a run that crashed before its own `DisposeAsync` leaves nothing for the next one; the sweep which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
+Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), and the factory refuses any other number at start. The alert-triage agent's gate runs use database 1 of a separate triage Redis instance, chosen by `RedisHost`/`RedisPort`/`RedisPassword` in its environment, never of the instance production shares. `ManualsWebApplicationFactory` deletes every key in the connected database in `InitializeAsync` before the first test and in `DisposeAsync` after the last, each time after checking that its number is 1, so a run that crashed before its own `DisposeAsync` leaves nothing for the next one; the sweep which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
 
 Concurrent runs against the same Redis instance are not supported.
 

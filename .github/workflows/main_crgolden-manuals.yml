@@ -178,11 +178,9 @@ jobs:
           RedisSsl: true
           RedisPassword: ${{ secrets.REDIS_PASSWORD }}
           RedisDatabase: ${{ vars.REDIS_DATABASE_TEST }}
-          OpenAIEndpoint: ${{ vars.OPENAI_ENDPOINT }}
           OpenAIModel: ${{ vars.OPENAI_MODEL }}
           OpenAIMaxOutputTokenCount: ${{ vars.OPENAI_MAX_OUTPUT_TOKEN_COUNT }}
           OpenAIInstructions: ${{ vars.OPENAI_INSTRUCTIONS }}
-          OpenAIApiKey: ${{ secrets.OPENAI_API_KEY }}
           IntegrationPrompts__ManualRequestFormat: ${{ vars.INTEGRATION_PROMPTS_MANUAL_REQUEST_FORMAT }}
           IntegrationPrompts__RecallProduct: ${{ vars.INTEGRATION_PROMPTS_RECALL_PRODUCT }}
         run: |

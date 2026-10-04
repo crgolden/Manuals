@@ -1,13 +1,18 @@
 namespace Manuals.Tests.Integration.Infrastructure;
 
+using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Globalization;
+using Manuals.Tests.Integration.TestSupport;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenAI.Responses;
 using StackExchange.Redis;
 
 public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
@@ -18,9 +23,18 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
 
     internal static readonly string TestEmailAddress = Generated.NewEmailAddress();
 
+    private readonly HttpClient _openAIHttpClient;
+
     private bool _hostCreated;
 
+    public ManualsWebApplicationFactory()
+    {
+        _openAIHttpClient = new HttpClient(OpenAIStub);
+    }
+
     public string? RefusedDatabase { get; private set; }
+
+    public OpenAIResponsesStub OpenAIStub { get; } = new();
 
     public async ValueTask InitializeAsync()
     {
@@ -35,10 +49,17 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
         }
 
         await base.DisposeAsync();
+        _openAIHttpClient.Dispose();
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
+        builder.ConfigureHostConfiguration(configuration => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                [OpenAISettingKeys.Endpoint] = Generated.NewHttpsUri(Generated.NewHostname()).ToString(),
+                [OpenAISettingKeys.ApiKey] = Generated.NewSecretValue(),
+            }));
         var host = base.CreateHost(builder);
         _hostCreated = true;
         return host;
@@ -62,6 +83,15 @@ public sealed class ManualsWebApplicationFactory : WebApplicationFactory<Program
                 services.RemoveAll<ILoggerFactory>();
                 services.AddLogging(lb => lb.AddConsole());
             }
+
+            services.RemoveAll<ResponsesClient>();
+            services.AddSingleton(new ResponsesClient(
+                new ApiKeyCredential(Generated.NewSecretValue()),
+                new ResponsesClientOptions
+                {
+                    Transport = new HttpClientPipelineTransport(_openAIHttpClient),
+                    RetryPolicy = new ClientRetryPolicy(0),
+                }));
 
             services.AddAuthentication(TestScheme)
                 .AddScheme<AuthenticationSchemeOptions, IntegrationAuthHandler>(TestScheme, _ => { });

@@ -30,7 +30,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
     Uri oidcAuthority = builder.Configuration.GetRequired<Uri>("OidcAuthority"),
-        openAIEndpoint = builder.Configuration.GetRequired<Uri>("OpenAIEndpoint");
+        openAIEndpoint = builder.Configuration.GetRequired<Uri>(OpenAISettingKeys.Endpoint);
     var responsesClientOptions = new ResponsesClientOptions
     {
         Endpoint = new Uri($"{openAIEndpoint}openai/v1/")
@@ -118,7 +118,7 @@ try
     }
     else
     {
-        var openAIApiKey = builder.Configuration.GetRequired<string>("OpenAIApiKey");
+        var openAIApiKey = builder.Configuration.GetRequired<string>(OpenAISettingKeys.ApiKey);
         var apiKeyCredential = new ApiKeyCredential(openAIApiKey);
         responsesClient = new ResponsesClient(apiKeyCredential, responsesClientOptions);
         builder.Services

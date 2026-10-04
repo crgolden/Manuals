@@ -16,7 +16,7 @@ $repo = $PSScriptRoot
 $sarif = (Join-Path $gateOutput 'manuals-inspect.sarif')
 $unitTrx = Join-Path $repo 'Manuals.Tests.Unit\bin\Release\net10.0\TestResults\unit-tests.trx'
 $integrationTrx = Join-Path $repo 'Manuals.Tests.Integration\bin\Release\net10.0\TestResults\integration-tests.trx'
-$sonarBranch = "branch-local-$($env:COMPUTERNAME.ToLowerInvariant())"
+$sonarBranch = Get-SonarBranchName
 $beginSonar = "Begin Sonar analysis (branch $sonarBranch)"
 $build = 'Build with dotnet (Release, RestoreLockedMode)'
 $endSonar = 'End Sonar analysis (quality gate waited)'
@@ -74,19 +74,25 @@ if (Test-StepCarried $integrationStep) {
     Write-Row $redisStep 'NOT RUN' 'the integration tier carried its verdict, so no Redis is needed'
 }
 else {
-    $wslSessionStart = [Diagnostics.ProcessStartInfo]::new('wsl.exe', '--exec sleep infinity')
-    $wslSessionStart.UseShellExecute = $true
-    $wslSessionStart.WindowStyle = 'Hidden'
-    $wslSession = [Diagnostics.Process]::Start($wslSessionStart)
+    $redisFromEnvironment = -not [string]::IsNullOrWhiteSpace($env:RedisHost)
+    $wslSession = $null
+    if (-not $redisFromEnvironment) {
+        $wslSessionStart = [Diagnostics.ProcessStartInfo]::new('wsl.exe', '--exec sleep infinity')
+        $wslSessionStart.UseShellExecute = $true
+        $wslSessionStart.WindowStyle = 'Hidden'
+        $wslSession = [Diagnostics.Process]::Start($wslSessionStart)
+    }
     try {
         $redisSettings = Get-Content -Raw (Join-Path $repo 'Manuals\appsettings.Development.json') | ConvertFrom-Json
-        $redisEndpoint = "$($redisSettings.RedisHost):$($redisSettings.RedisPort)"
+        $redisHost = if ($redisFromEnvironment) { $env:RedisHost } else { $redisSettings.RedisHost }
+        $redisPort = if ($redisFromEnvironment -and $env:RedisPort) { $env:RedisPort } else { $redisSettings.RedisPort }
+        $redisEndpoint = "${redisHost}:$redisPort"
         $redisAvailable = $false
         $redisDeadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
-        while (-not $redisAvailable -and -not $wslSession.HasExited -and [DateTimeOffset]::UtcNow -lt $redisDeadline) {
+        while (-not $redisAvailable -and -not ($wslSession -and $wslSession.HasExited) -and [DateTimeOffset]::UtcNow -lt $redisDeadline) {
             $redisProbe = [Net.Sockets.TcpClient]::new()
             try {
-                $redisAvailable = $redisProbe.ConnectAsync($redisSettings.RedisHost, [int]$redisSettings.RedisPort).Wait(1000)
+                $redisAvailable = $redisProbe.ConnectAsync($redisHost, [int]$redisPort).Wait(1000)
             }
             catch [AggregateException] {
                 Start-Sleep -Seconds 1
@@ -96,12 +102,18 @@ else {
             }
         }
 
-        if ($redisAvailable) {
+        if ($redisAvailable -and $redisFromEnvironment) {
+            Write-Row $redisStep 'PASS' "RedisHost taken from the environment, and $redisEndpoint accepts connections"
+        }
+        elseif ($redisAvailable) {
             Write-Row $redisStep 'PASS' "a WSL session is open and $redisEndpoint accepts connections"
         }
-        elseif ($wslSession.HasExited) {
+        elseif ($wslSession -and $wslSession.HasExited) {
             Write-Row $redisStep 'SKIPPED' "WSL could not be started (wsl.exe exit $($wslSession.ExitCode))"
             Write-Row $integrationStep 'SKIPPED' 'needs WSL Redis, and WSL could not be started'
+        }
+        elseif ($redisFromEnvironment) {
+            Stop-Gate $redisStep "nothing accepted a connection on $redisEndpoint (RedisHost from the environment) within 60 seconds"
         }
         else {
             Stop-Gate $redisStep "WSL is running but nothing accepted a connection on $redisEndpoint within 60 seconds"
@@ -110,7 +122,7 @@ else {
         if ($redisAvailable) {
             if (Test-Path $integrationTrx) { Remove-Item $integrationTrx -Force }
             $env:ASPNETCORE_ENVIRONMENT = 'Development'
-            $env:RedisDatabase = '1'
+            $env:RedisDatabase ??= '1'
             $global:LASTEXITCODE = $null
             dotnet-coverage collect `
                 "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults" `
@@ -119,8 +131,10 @@ else {
         }
     }
     finally {
-        if (-not $wslSession.HasExited) { $wslSession.Kill($true) }
-        $wslSession.Dispose()
+        if ($wslSession) {
+            if (-not $wslSession.HasExited) { $wslSession.Kill($true) }
+            $wslSession.Dispose()
+        }
     }
 }
 
