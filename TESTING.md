@@ -26,7 +26,7 @@ dotnet build Manuals.Tests.Unit --configuration Debug
 
 ### Integration Tests
 
-Requires a running Redis instance and an Azure OpenAI endpoint. No `az login` needed — in non-production, `Program.cs` uses `ApiKeyCredential` (from `OpenAIApiKey` User Secret) and User Secrets for Redis. Azure credentials (`DefaultAzureCredential`) are only constructed inside `IsProduction()`.
+Requires a running Redis instance and an Azure OpenAI endpoint. Local Redis runs in WSL 2, which stops its VM, and Redis with it, shortly after the last WSL session closes: keep a WSL terminal open for the whole run. No `az login` needed: in non-production, `Program.cs` uses `ApiKeyCredential` (from `OpenAIApiKey` User Secret) and User Secrets for Redis. Azure credentials (`DefaultAzureCredential`) are only constructed inside `IsProduction()`.
 
 1. Set `ASPNETCORE_ENVIRONMENT=Development` so the non-production branch of `Program.cs` runs and User Secrets load.
 2. Ensure User Secrets include: `RedisHost`, `RedisPort`, `RedisSsl`, `RedisPassword`, `OpenAIEndpoint`, `OpenAIModel`, `OpenAIInstructions`, `OpenAIMaxOutputTokenCount`, `OpenAIApiKey`, `OidcAuthority`.
@@ -47,6 +47,17 @@ dotnet build Manuals.Tests.Integration --configuration Debug
 # Redirect output for in-flight inspection
 cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
 ```
+
+### In the local gate
+
+`gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. The `Local Redis (WSL) for the integration tier` row decides the tier:
+
+| What happened | Redis row | Integration tier |
+|---|---|---|
+| WSL started and Redis accepted a connection | `PASS` | runs |
+| `wsl.exe` exited, so WSL could not start (a boot with no virtualization) | `SKIPPED`, with the `wsl.exe` exit code | `SKIPPED` |
+| WSL is running but nothing accepted a connection within 60 seconds | `FAIL`, which stops the gate | not reached |
+| The tier carried its verdict from an earlier run on the same inputs | `NOT RUN` | `CARRIED` |
 
 ## Test Infrastructure
 

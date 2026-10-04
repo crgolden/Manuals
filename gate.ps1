@@ -9,8 +9,8 @@ if (-not (Test-Path -LiteralPath $gateCommon)) {
 . $gateCommon
 $gateOutput = Join-Path ([IO.Path]::GetTempPath()) "crgolden-gates\$(Split-Path -Leaf $PSScriptRoot)"
 New-Item -ItemType Directory -Force -Path $gateOutput | Out-Null
-Register-GateSteps @('Local Redis (WSL) for the integration tier', 'Begin Sonar analysis', 'Build with dotnet', 'Restore local tools', 'jb inspectcode',
-    'Run unit tests with coverage', 'Run integration tests with coverage', 'End Sonar analysis',
+Register-GateSteps @('Begin Sonar analysis', 'Build with dotnet', 'Restore local tools', 'jb inspectcode',
+    'Run unit tests with coverage', 'Local Redis (WSL) for the integration tier', 'Run integration tests with coverage', 'End Sonar analysis',
     'Fail on open Sonar issues')
 $repo = $PSScriptRoot
 $sarif = (Join-Path $gateOutput 'manuals-inspect.sarif')
@@ -23,19 +23,12 @@ $endSonar = 'End Sonar analysis (quality gate waited)'
 $sonarIssues = 'Fail on open Sonar issues'
 $unitStep = 'Run unit tests with coverage (Category=Unit)'
 $integrationStep = 'Run integration tests with coverage (Category=Integration)'
+$redisStep = 'Local Redis (WSL) for the integration tier'
 $env:TZ = 'UTC'
 if ($env:TZ -ne 'UTC') { Write-Host 'GATE: FAILED (TZ pin)'; exit 1 }
 Set-Location $repo
 Initialize-GateState 'Manuals' $repo
 Invoke-CatalogSteps
-
-$redisAvailable = [bool](Get-CimInstance Win32_Processor | Select-Object -First 1).VirtualizationFirmwareEnabled
-if ($redisAvailable) {
-    Write-Row 'Local Redis (WSL) for the integration tier' 'PASS' 'virtualization available in this boot'
-}
-else {
-    Write-Row 'Local Redis (WSL) for the integration tier' 'SKIPPED' 'this boot has no virtualization, so WSL Redis cannot run; the integration tier is skipped'
-}
 
 $sonarCarried = Test-StepCarried $sonarIssues
 if ($sonarCarried) {
@@ -47,7 +40,7 @@ else {
     $sonarStartedAt = [DateTimeOffset]::UtcNow
     $env:JAVA_HOME = "$env:SystemDrive\sonar-scanner-8.0.1.6346-windows-x64\jre"
     $global:LASTEXITCODE = $null
-    dotnet-sonarscanner begin /k:"crgolden_Manuals" /o:"crgolden" /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="coverage.opencover.xml" /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" /d:sonar.exclusions="**/bin/**,**/obj/**" /d:sonar.coverage.exclusions="**/Program.cs" /d:sonar.qualitygate.wait=true /d:sonar.scanner.skipJreProvisioning=true /d:sonar.branch.name="$sonarBranch"
+    dotnet-sonarscanner begin /k:"crgolden_Manuals" /o:"crgolden" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="coverage.opencover.xml" /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" /d:sonar.exclusions="**/bin/**,**/obj/**" /d:sonar.coverage.exclusions="**/Program.cs,**/gate.ps1" /d:sonar.qualitygate.wait=true /d:sonar.scanner.skipJreProvisioning=true /d:sonar.branch.name="$sonarBranch"
     $null = Test-Exit $beginSonar
 
     $global:LASTEXITCODE = $null
@@ -74,26 +67,66 @@ if (-not (Test-StepCarried $unitStep)) {
         --format opencover --output "coverage.opencover.xml" `
         --skipautoprops --exclude-by-attribute GeneratedCodeAttribute --exclude-by-file "**/obj/**" `
         --exclude-by-file "**/Program.cs" --does-not-return-attribute DoesNotReturnAttribute --include "[Manuals]*"
-    Test-Trx $unitStep $unitTrx $global:LASTEXITCODE 1
+    Test-Trx $unitStep $unitTrx $global:LASTEXITCODE -floor 1
 }
 
-if (-not $redisAvailable) {
-    Write-Row $integrationStep 'SKIPPED' 'needs WSL Redis, which this boot cannot run'
+if (Test-StepCarried $integrationStep) {
+    Write-Row $redisStep 'NOT RUN' 'the integration tier carried its verdict, so no Redis is needed'
 }
-elseif (-not (Test-StepCarried $integrationStep)) {
-    if (Test-Path $integrationTrx) { Remove-Item $integrationTrx -Force }
-    $env:ASPNETCORE_ENVIRONMENT = 'Development'
-    $env:RedisDatabase = '1'
-    $global:LASTEXITCODE = $null
-    dotnet-coverage collect `
-        "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults" `
-        -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
-    Test-Trx $integrationStep $integrationTrx $global:LASTEXITCODE 1
+else {
+    $wslSessionStart = [Diagnostics.ProcessStartInfo]::new('wsl.exe', '--exec sleep infinity')
+    $wslSessionStart.UseShellExecute = $true
+    $wslSessionStart.WindowStyle = 'Hidden'
+    $wslSession = [Diagnostics.Process]::Start($wslSessionStart)
+    try {
+        $redisSettings = Get-Content -Raw (Join-Path $repo 'Manuals\appsettings.Development.json') | ConvertFrom-Json
+        $redisEndpoint = "$($redisSettings.RedisHost):$($redisSettings.RedisPort)"
+        $redisAvailable = $false
+        $redisDeadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
+        while (-not $redisAvailable -and -not $wslSession.HasExited -and [DateTimeOffset]::UtcNow -lt $redisDeadline) {
+            $redisProbe = [Net.Sockets.TcpClient]::new()
+            try {
+                $redisAvailable = $redisProbe.ConnectAsync($redisSettings.RedisHost, [int]$redisSettings.RedisPort).Wait(1000)
+            }
+            catch [AggregateException] {
+                Start-Sleep -Seconds 1
+            }
+            finally {
+                $redisProbe.Dispose()
+            }
+        }
+
+        if ($redisAvailable) {
+            Write-Row $redisStep 'PASS' "a WSL session is open and $redisEndpoint accepts connections"
+        }
+        elseif ($wslSession.HasExited) {
+            Write-Row $redisStep 'SKIPPED' "WSL could not be started (wsl.exe exit $($wslSession.ExitCode))"
+            Write-Row $integrationStep 'SKIPPED' 'needs WSL Redis, and WSL could not be started'
+        }
+        else {
+            Stop-Gate $redisStep "WSL is running but nothing accepted a connection on $redisEndpoint within 60 seconds"
+        }
+
+        if ($redisAvailable) {
+            if (Test-Path $integrationTrx) { Remove-Item $integrationTrx -Force }
+            $env:ASPNETCORE_ENVIRONMENT = 'Development'
+            $env:RedisDatabase = '1'
+            $global:LASTEXITCODE = $null
+            dotnet-coverage collect `
+                "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults" `
+                -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
+            Test-Trx $integrationStep $integrationTrx $global:LASTEXITCODE -floor 1
+        }
+    }
+    finally {
+        if (-not $wslSession.HasExited) { $wslSession.Kill($true) }
+        $wslSession.Dispose()
+    }
 }
 
 if (-not $sonarCarried) {
     $global:LASTEXITCODE = $null
-    dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+    dotnet-sonarscanner end
     $null = Test-Exit $endSonar
     Test-SonarIssues $sonarIssues 'crgolden_Manuals' $sonarBranch $sonarStartedAt
 }
