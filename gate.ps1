@@ -1,4 +1,4 @@
-param([string]$Goal)
+param([string]$Goal, [string[]]$Steps)
 
 $ErrorActionPreference = 'Continue'
 $gateCommon = Join-Path $PSScriptRoot '..\Tools\Gates\GateCommon.ps1'
@@ -12,6 +12,17 @@ New-Item -ItemType Directory -Force -Path $gateOutput | Out-Null
 Register-GateSteps @('Begin Sonar analysis', 'Build with dotnet', 'Restore local tools', 'jb inspectcode',
     'Run unit tests with coverage', 'Local Redis (WSL) for the integration tier', 'Run integration tests with coverage', 'End Sonar analysis',
     'Fail on open Sonar issues')
+Register-StepInputs @{
+    'Begin Sonar analysis'                       = @('*')
+    'Build with dotnet'                          = @('*')
+    'Restore local tools'                        = @('dotnet-tools.json')
+    'jb inspectcode'                             = @('*')
+    'Run unit tests with coverage'               = @('*')
+    'Local Redis (WSL) for the integration tier' = @('*')
+    'Run integration tests with coverage'        = @('*')
+    'End Sonar analysis'                         = @('*')
+    'Fail on open Sonar issues'                  = @('*')
+}
 $repo = $PSScriptRoot
 $sarif = (Join-Path $gateOutput 'manuals-inspect.sarif')
 $unitTrx = Join-Path $repo 'Manuals.Tests.Unit\bin\Release\net10.0\TestResults\unit-tests.trx'
@@ -28,6 +39,7 @@ $env:TZ = 'UTC'
 if ($env:TZ -ne 'UTC') { Write-Host 'GATE: FAILED (TZ pin)'; exit 1 }
 Set-Location $repo
 Initialize-GateState 'Manuals' $repo
+Assert-RequestedSteps $Steps
 Invoke-CatalogSteps
 
 $sonarCarried = Test-StepCarried $sonarIssues
