@@ -87,6 +87,7 @@ if (Test-StepCarried $integrationStep) {
 }
 else {
     $redisFromEnvironment = -not [string]::IsNullOrWhiteSpace($env:RedisHost)
+    if ($redisFromEnvironment -and [string]::IsNullOrWhiteSpace($env:RedisPort)) { Stop-Gate $redisStep 'RedisHost is set in the environment without RedisPort' }
     $wslSession = $null
     if (-not $redisFromEnvironment) {
         $wslSessionStart = [Diagnostics.ProcessStartInfo]::new('wsl.exe', '--exec sleep infinity')
@@ -97,7 +98,7 @@ else {
     try {
         $redisSettings = Get-Content -Raw (Join-Path $repo 'Manuals\appsettings.Development.json') | ConvertFrom-Json
         $redisHost = if ($redisFromEnvironment) { $env:RedisHost } else { $redisSettings.RedisHost }
-        $redisPort = if ($redisFromEnvironment -and $env:RedisPort) { $env:RedisPort } else { $redisSettings.RedisPort }
+        $redisPort = if ($redisFromEnvironment) { $env:RedisPort } else { $redisSettings.RedisPort }
         $redisEndpoint = "${redisHost}:$redisPort"
         $redisAvailable = $false
         $redisDeadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
