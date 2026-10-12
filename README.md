@@ -162,7 +162,7 @@ Their local values live in `Manuals/appsettings.Development.json`; see [TESTING.
 | `OpenAIInstructions` | System prompt |
 | `OpenAIMaxOutputTokenCount` | Max tokens per completion |
 | `RedisHost` | Redis host name |
-| `RedisPort` | `6380` |
+| `RedisPort` | `6379` |
 | `RedisSsl` | `true` |
 | `BlobUri` | Azure Blob Storage URL (Data Protection keys) |
 | `DataProtectionKeyIdentifier` | Key Vault key URI |
