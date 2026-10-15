@@ -1,4 +1,4 @@
-param([string]$Goal, [string[]]$Steps)
+param([string]$Goal)
 
 $ErrorActionPreference = 'Continue'
 $gateCommon = Join-Path $PSScriptRoot '..\Tools\Gates\GateCommon.ps1'
@@ -39,7 +39,7 @@ $env:TZ = 'UTC'
 if ($env:TZ -ne 'UTC') { Write-Host 'GATE: FAILED (TZ pin)'; exit 1 }
 Set-Location $repo
 Initialize-GateState 'Manuals' $repo
-Assert-RequestedSteps $Steps
+Resolve-OwedSteps
 Invoke-CatalogSteps
 
 $sonarCarried = Test-StepCarried $sonarIssues
