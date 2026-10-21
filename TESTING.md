@@ -2,9 +2,7 @@
 
 The Manuals test suite uses xUnit v3 and is split into two tiers: **unit tests** that run on every push with no external dependencies, and **integration tests** that exercise a real Redis through the full HTTP pipeline, with Azure OpenAI replaced by an in-process stub, locally and on every push to `main`. Redis is never Azure Cache for Redis: locally it is Redis in WSL 2 at `localhost:6379`, and in CI it is the self-hosted Redis named by the `REDIS_HOST` repository variable.
 
-For running tests (`dotnet test` from the repo root — never the workspace root) and `ASPNETCORE_ENVIRONMENT` discipline, see the workspace-level [TESTING.md](../AGENTS/TESTING.md).
-
-Unit test coding standards (MockBehavior.Strict, argument verification, SetupSequence, no control-flow in tests, etc.) are in the workspace-level [Unit Test Standards](../AGENTS/TESTING.md#unit-test-standards).
+Run every test command from the repo root. The integration tier needs `ASPNETCORE_ENVIRONMENT` set as shown below.
 
 ## Test Tiers
 
@@ -51,7 +49,7 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### In the local gate
 
-**On a machine where WSL cannot start, the gate skips the integration tier and runs every other step.** The skip is reported as `SKIPPED`, never as a pass. `gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. When `RedisHost` is already in the environment, as in the alert-triage gate, it opens no WSL session and waits for that host and `RedisPort` instead, failing the row if nothing answers. The `Local Redis (WSL) for the integration tier` row decides the tier:
+**On a machine where WSL cannot start, the gate skips the integration tier and runs every other step.** The skip is reported as `SKIPPED`, never as a pass. `gate.ps1` holds WSL open itself. Before the integration tier it starts a hidden `wsl.exe --exec sleep infinity` session in the default distribution, waits up to 60 seconds for `RedisHost`:`RedisPort` from `Manuals/appsettings.Development.json` to accept a connection, and kills the session when the tier ends, however it ends. When `RedisHost` is already in the environment, it opens no WSL session and waits for that host and `RedisPort` instead, failing the row if nothing answers. The `Local Redis (WSL) for the integration tier` row decides the tier:
 
 | What happened | Redis row | Integration tier |
 |---|---|---|
@@ -68,7 +66,7 @@ cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.ex
 
 ### Data Isolation
 
-Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), and the factory refuses any other number at start. The alert-triage agent's gate runs use database 1 of a separate triage Redis instance, chosen by `RedisHost`/`RedisPort`/`RedisPassword` in its environment, never of the instance production shares. `ManualsWebApplicationFactory` deletes every key in the connected database in `InitializeAsync` before the first test and in `DisposeAsync` after the last, each time after checking that its number is 1, so a run that crashed before its own `DisposeAsync` leaves nothing for the next one; the sweep which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
+Integration tests write to real Redis on database 1 (`TestDatabaseContractConstants.TestDatabase`), and the factory refuses any other number at start. Point `RedisHost`/`RedisPort`/`RedisPassword` at a Redis instance no production app uses. `ManualsWebApplicationFactory` deletes every key in the connected database in `InitializeAsync` before the first test and in `DisposeAsync` after the last, each time after checking that its number is 1, so a run that crashed before its own `DisposeAsync` leaves nothing for the next one; the sweep which covers both namespaces the tier writes: the primary `user:*` / `chat:*` keys and the HybridCache L2 `manuals:hc:*` entries, serialized objects that would otherwise serve stale data to the next run. No test cleans up after itself.
 
 Concurrent runs against the same Redis instance are not supported.
 
@@ -80,9 +78,10 @@ A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFact
 
 ## Local SonarCloud analysis
 
-Generate coverage first, then run from `Manuals/`. Unit coverage is OpenCover (branch-bearing, via
-`coverlet.console` pinned in `dotnet-tools.json` — restore with `dotnet tool restore`; see the workspace
-`TESTING.md` for the command rationale); integration coverage stays VS Coverage XML. SonarCloud unions both.
+The analysis needs the repo's SonarCloud token and project, which only maintainers have. Generate coverage first,
+then run from the repo root. Unit coverage is OpenCover (branch-bearing, via `coverlet.console` pinned in
+`dotnet-tools.json`; restore with `dotnet tool restore`); integration coverage stays VS Coverage XML. SonarCloud
+unions both.
 
 ```powershell
 # Unit (OpenCover, carries branch/condition coverage)
@@ -110,7 +109,3 @@ $env:SONAR_TOKEN = "<token>"
 ```
 
 Required coverage files: `coverage.opencover.xml` (unit, OpenCover), `coverage-integration.xml` (integration, VS Coverage).
-
-### When to build a truth table
-
-The coverage **score is read from SonarCloud, never hand-maintained** here. Build a per-method table in the workspace `COVERAGE/Manuals.md` only when SonarCloud flags a method with **cognitive complexity > 15 AND uncovered conditions > 0**: the table is escalation for the gnarly few, not a per-class deliverable. See the workspace `COVERAGE/METHOD.md`.

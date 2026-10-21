@@ -4,18 +4,9 @@
 
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=crgolden_Manuals)](https://sonarcloud.io/summary/new_code?id=crgolden_Manuals)
 
-An ASP.NET Core 10 API that proxies requests to Azure OpenAI, providing REST endpoints for managing AI chat sessions with full message history stored in Redis.
+An ASP.NET Core 10 API that proxies requests to Azure OpenAI, providing REST endpoints for managing AI chat sessions with full message history stored in Redis. Every chat endpoint requires a JWT access token whose `scope` claim includes `manuals`.
 
-## Sibling Applications
-
-Manuals is a **resource server** in a five-app system. All endpoints require a JWT Bearer token with the `manuals` scope.
-
-| Repo | Role | How Manuals interacts |
-|---|---|---|
-| [Identity](https://github.com/crgolden/Identity) | OIDC Identity Provider | Issues the access tokens Manuals validates (scope `manuals`) |
-| [Inventory](https://github.com/crgolden/Inventory) | Angular SPA + ASP.NET Core BFF | Sole client today — the BFF proxies `/manuals/api/**` with an access token |
-| [Products](https://github.com/crgolden/Products) | OData v4 product catalog API | The `Product.ManualUrl` field is populated by the embedded chat panel that drives Manuals |
-| [Infrastructure](https://github.com/crgolden/Infrastructure) | Health monitoring dashboard | Polls Manuals' `/health` endpoint |
+How the parts fit together and the rules each keeps: [ARCHITECTURE.md](ARCHITECTURE.md). How to run every test tier: [TESTING.md](TESTING.md).
 
 ## Architecture
 
@@ -27,7 +18,7 @@ Client
   └── POST /chats/{id}/messages/stream → ChatsController → RedisChatsService → ResponsesClient (SSE) → Azure OpenAI
 ```
 
-**Client authentication:** all endpoints require a JWT Bearer token with the `manuals` scope (issued by Identity, forwarded by the Inventory BFF).
+**Client authentication:** every chat endpoint requires a JWT Bearer token with the `manuals` scope, issued by the OIDC provider `OidcAuthority` names.
 
 **Azure OpenAI authentication:** `DefaultAzureCredential` (Managed Identity) in production. `ApiKeyCredential` (`OpenAIApiKey` User Secret) in non-production — no `az login` needed locally.
 
@@ -59,9 +50,20 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 
 | Tool | Notes |
 |---|---|
-| [.NET 10 SDK](https://dotnet.microsoft.com/download) | |
-| Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production |
-| Redis instance | Self-hosted; locally, Redis in WSL 2 at `localhost:6379` |
+| [.NET 10 SDK](https://dotnet.microsoft.com/download) | `global.json` pins `10.0.201` and rolls forward to the latest feature band |
+| GitHub personal access token | `read:packages` scope: the `Shared` package restores from the `crgolden` GitHub Packages feed (`NuGet.Config`), which asks for a token even for a public package. Store it as the `GitHub` source's credentials in your user NuGet configuration (`dotnet nuget update source GitHub --username <user> --password <token> --store-password-in-clear-text --configfile "$env:APPDATA\NuGet\NuGet.Config"`), never in this repo |
+| Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production. Not needed for the tests |
+| Redis instance | Any Redis the app can reach; on Windows, Redis in WSL 2 at `localhost:6379` works |
+| An OIDC provider | Issues the access tokens the chat endpoints accept |
+
+## Clone and build
+
+```powershell
+git clone https://github.com/crgolden/Manuals.git
+cd Manuals
+dotnet tool restore
+dotnet build Manuals.slnx
+```
 
 ## Getting Started
 
@@ -129,6 +131,20 @@ dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
 ```
 
 See [TESTING.md](TESTING.md) for the full testing guide.
+
+## Gate
+
+`gate.ps1` is the maintainers' gate. It loads a private toolkit from a folder beside this repo, so in a plain clone it stops at once with `GATE: FAILED`. To gate your own change, run the checks CI runs, in this order:
+
+```powershell
+dotnet tool restore
+dotnet build --no-incremental --configuration Release /p:RestoreLockedMode=true -warnaserror
+dotnet jb inspectcode Manuals.slnx --no-build -e=WARNING --output=inspectcode.sarif
+dotnet test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait "Category=Unit"
+dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait "Category=Integration"
+```
+
+`jb inspectcode` passes only when `inspectcode.sarif` holds no results; the integration tier needs Redis on database 1 ([TESTING.md](TESTING.md#integration-tests)).
 
 ## Deployment
 
