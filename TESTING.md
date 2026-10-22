@@ -76,17 +76,39 @@ A single xUnit collection fixture (`ICollectionFixture<ManualsWebApplicationFact
 
 ---
 
+## CI pipeline
+
+`.github/workflows/main_crgolden-manuals.yml` runs on every push to `main`, every pull request and on demand. The
+build job builds with warnings as errors under a SonarCloud analysis, runs `jb inspectcode` (any result fails), the
+unit tier under coverage, and the integration tier against the self-hosted Redis on database 1, then publishes and
+fails on any open Sonar issue. The integration tier is skipped on a pull request, and the Sonar steps for Dependabot;
+a Dependabot pull request first regenerates its `packages.lock.json` files.
+
 ## Local SonarCloud analysis
 
-The analysis needs the repo's SonarCloud token and project, which only maintainers have. Generate coverage first,
-then run from the repo root. Unit coverage is OpenCover (branch-bearing, via `coverlet.console` pinned in
-`dotnet-tools.json`; restore with `dotnet tool restore`); integration coverage stays VS Coverage XML. SonarCloud
-unions both.
+The analysis needs the repo's SonarCloud token and project, which only maintainers have. C# is analyzed only
+through the MSBuild scanner, `dotnet-sonarscanner` (`dotnet tool install --global dotnet-sonarscanner`): the
+standalone `sonar-scanner` CLI indexes C# files but publishes no issues, replacing the project's analysis with an
+empty one. Run from the repo root, in this order: `begin`, the build, coverage, `end`. The `begin` arguments are
+the ones `.github/workflows/main_crgolden-manuals.yml` passes, and must stay identical to them. `end` needs a Java
+17 or later runtime in `JAVA_HOME`, process scope only; the `jre` folder of a SonarScanner CLI install is one.
+Unit coverage is OpenCover (branch-bearing, via `coverlet.console` pinned in `dotnet-tools.json`); integration
+coverage stays VS Coverage XML. SonarCloud unions both.
 
 ```powershell
-# Unit (OpenCover, carries branch/condition coverage)
-dotnet build Manuals.Tests.Unit --configuration Release
+$env:SONAR_TOKEN = "<token>"
+$env:JAVA_HOME = "<a Java 17+ runtime>"
 dotnet tool restore
+dotnet-sonarscanner begin /k:"crgolden_Manuals" /o:"crgolden" /d:sonar.token="$env:SONAR_TOKEN" `
+  /d:sonar.host.url="https://sonarcloud.io" `
+  /d:sonar.cs.opencover.reportsPaths="coverage.opencover.xml" `
+  /d:sonar.cs.vscoveragexml.reportsPaths="coverage-integration.xml" `
+  /d:sonar.exclusions="**/bin/**,**/obj/**" `
+  /d:sonar.coverage.exclusions="**/Program.cs,**/gate.ps1" `
+  /d:sonar.qualitygate.wait=true /d:sonar.scanner.skipJreProvisioning=true
+dotnet build --no-incremental --configuration Release
+
+# Unit (OpenCover, carries branch/condition coverage)
 dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
   --target "dotnet" `
   --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit" `
@@ -97,15 +119,7 @@ dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
 
 # Integration (VS Coverage XML, line-only) — see CI for the dotnet-coverage collect command → coverage-integration.xml
 
-$env:SONAR_TOKEN = "<token>"
-& "$env:SystemDrive\sonar-scanner-8.0.1.6346-windows-x64\bin\sonar-scanner.bat" `
-  "-Dsonar.projectKey=crgolden_Manuals" `
-  "-Dsonar.organization=crgolden" `
-  "-Dsonar.sources=Manuals" `
-  "-Dsonar.tests=Manuals.Tests.Unit" `
-  "-Dsonar.exclusions=**/bin/**,**/obj/**" `
-  "-Dsonar.cs.opencover.reportsPaths=coverage.opencover.xml" `
-  "-Dsonar.cs.vscoveragexml.reportsPaths=coverage-integration.xml"
+dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
 ```
 
 Required coverage files: `coverage.opencover.xml` (unit, OpenCover), `coverage-integration.xml` (integration, VS Coverage).

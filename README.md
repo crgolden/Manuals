@@ -34,7 +34,7 @@ Redis is the primary store; keys never expire:
 
 The two hot read paths (a chat's message history and a user's chat list) are wrapped in [HybridCache](https://learn.microsoft.com/aspnet/core/performance/caching/hybrid) via `GetOrCreateAsync`. L1 is in-process; L2 is `IDistributedCache` backed by the same Redis, under the `manuals:hc:` key prefix (distinct from the primary `user:*` / `chat:*` keys, so the two namespaces never collide). TTLs are L1/L2 5m/30m for messages and 1m/5m for the chat list. Every write invalidates the affected entry with `RemoveAsync`, so reads never serve stale data after a mutation.
 
-## Tech Stack
+## Technologies
 
 | Layer | Technology |
 |---|---|
@@ -65,9 +65,7 @@ dotnet tool restore
 dotnet build Manuals.slnx
 ```
 
-## Getting Started
-
-### 1. Configure User Secrets
+## Configuration
 
 ```powershell
 dotnet user-secrets set "OpenAIEndpoint" "https://<your-resource>.openai.azure.com/" --project Manuals/Manuals.csproj
@@ -77,7 +75,7 @@ dotnet user-secrets set "RedisPassword" "<your-local-redis-requirepass>" --proje
 
 > These are the three keys `Manuals/appsettings.Development.json` leaves null. Every other local value, including `RedisHost`/`RedisPort`/`RedisSsl` (`localhost:6379`, no TLS) and `OidcAuthority`, comes from that file, and a User Secret of the same name overrides it. CI and production take their values from repository variables and from App Service settings and Key Vault respectively.
 
-### 2. Run
+## Run locally
 
 ```bash
 dotnet run --project Manuals/Manuals.csproj
@@ -110,12 +108,9 @@ Manuals.Tests.Unit/         # xUnit v3: unit tests (Moq), Category=Unit
 Manuals.Tests.Integration/  # xUnit v3: integration tests against a real Redis with Azure OpenAI stubbed, Category=Integration
 ```
 
-## Commands
+## Tests
 
 ```powershell
-# Build
-dotnet build
-
 # Unit tests only (no external dependencies)
 dotnet build Manuals.Tests.Unit --configuration Debug
 .\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
@@ -125,16 +120,13 @@ $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:RedisDatabase = "1"
 dotnet build Manuals.Tests.Integration --configuration Debug
 .\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
-
-# Publish
-dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
 ```
 
 See [TESTING.md](TESTING.md) for the full testing guide.
 
 ## Gate
 
-`gate.ps1` is the maintainers' gate. It loads a private toolkit from a folder beside this repo, so in a plain clone it stops at once with `GATE: FAILED`. To gate your own change, run the checks CI runs, in this order:
+`gate.ps1` is the maintainers' gate. It dot-sources the gate library script that the `GATE_LIBRARY` environment variable names, which defines the step functions `gate.ps1` calls; unset, as in a plain clone, it stops at once with `GATE: FAILED` and records nothing. To gate with a library of your own, set `GATE_LIBRARY` to its path; it must define every function `gate.ps1` calls, since those functions decide whether each step ran and passed. To gate your own change without one, run the checks CI runs, in this order:
 
 ```powershell
 dotnet tool restore
@@ -148,13 +140,14 @@ dotnet test --project Manuals.Tests.Integration --no-build --configuration Relea
 
 ## Deployment
 
-The GitHub Actions workflow triggers on pushes to `main` and pull requests.
+The GitHub Actions workflow triggers on pushes to `main`, pull requests and manual dispatch.
 
-**Build job** — runs on every trigger:
-1. Builds the solution (`dotnet build --configuration Release`)
+**Build job**, which runs on every trigger:
+1. Builds the solution (`dotnet build --configuration Release`) under a SonarCloud analysis, then runs `jb inspectcode`
 2. Runs unit tests with coverage
 3. Runs integration tests against the self-hosted Redis named by `REDIS_HOST`, with Azure OpenAI stubbed in process and no Azure login (on push to `main` and `workflow_dispatch`; skipped on `pull_request`)
 4. Publishes the web app (`-r win-x86 --self-contained false`) and uploads the artifact
+5. Ends the SonarCloud analysis and fails on any open Sonar issue
 
 The integration step reads its configuration from repository variables and secrets named by the SCREAMING_SNAKE_CASE of each key (`OPENAI_INSTRUCTIONS` for `OpenAIInstructions`, and so on). Two variables exist only for the test prompts, which are configuration rather than test code:
 
@@ -165,8 +158,14 @@ The integration step reads its configuration from repository variables and secre
 
 Their local values live in `Manuals/appsettings.Development.json`; see [TESTING.md](TESTING.md#integration-tests).
 
-**Deploy job** — runs after a successful build on `main`:
+**Deploy job**, which runs after a successful build on every event except a pull request:
 1. Deploys the web app to **Azure App Service (Windows, F1)** via Azure OIDC
+
+To publish the web app yourself (`-r win-x86` is required: the F1 tier runs 32-bit only):
+
+```powershell
+dotnet publish Manuals -c Release -r win-x86 --self-contained false -o ./publish
+```
 
 ### Azure App Service Application Settings
 
