@@ -188,9 +188,9 @@
       },
       "Shared": {
         "type": "Direct",
-        "requested": "[1.5.1, )",
-        "resolved": "1.5.1",
-        "contentHash": "FQoXImDqgqeSlQXWcW2L85ZtgKdq6ajb/xGMNA2UWhXLudbYSnQhZAUj0MOJcYSNTHn8aRhsIVNMYeGiGpyeIA==",
+        "requested": "[1.6.0, )",
+        "resolved": "1.6.0",
+        "contentHash": "dJkN6cZnUzMocZ/UG590DyPv5kbFQIaNnZaU4kv/T2BB9oCnDizqFJTtjATYJeAdvz6Aek8Ixkm/CrdsN1A8WA==",
         "dependencies": {
           "OpenTelemetry.Instrumentation.AspNetCore": "1.19.0"
         }
