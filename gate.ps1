@@ -20,9 +20,9 @@ Register-StepInputs @{
     'Build with dotnet'                          = @('*')
     'Restore local tools'                        = @('dotnet-tools.json')
     'jb inspectcode'                             = @('*')
-    'Run unit tests with coverage'               = @('*')
-    'Local Redis (WSL) for the integration tier' = @('*')
-    'Run integration tests with coverage'        = @('*')
+    'Run unit tests with coverage'               = @('*', '!Manuals.Tests.Integration/*')
+    'Local Redis (WSL) for the integration tier' = @('*', '!Manuals.Tests.Unit/*')
+    'Run integration tests with coverage'        = @('*', '!Manuals.Tests.Unit/*')
     'End Sonar analysis'                         = @('*')
     'Fail on open Sonar issues'                  = @('*')
 }
