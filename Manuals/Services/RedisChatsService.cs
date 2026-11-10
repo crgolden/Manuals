@@ -263,7 +263,7 @@ public sealed class RedisChatsService : IChatsService
         var accumulated = new StringBuilder();
         try
         {
-            var updates = _responsesClient.CreateResponseStreamingAsync(options, cancellationToken);
+            await using var updates = await _responsesClient.CreateResponseStreamingAsync(options, cancellationToken);
             await foreach (var update in updates.OfType<StreamingResponseOutputTextDeltaUpdate>().WithCancellation(cancellationToken))
             {
                 accumulated.Append(update.Delta);

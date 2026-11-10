@@ -529,7 +529,7 @@ public sealed class RedisChatsServiceTests : IDisposable
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseStreamingAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
-            .Returns(new FakeStreamingResult(
+            .Returns(StreamOf(
                 new StreamingResponseOutputTextDeltaUpdate { Delta = firstDelta },
                 new StreamingResponseOutputTextDeltaUpdate { Delta = secondDelta }));
         var service = CreateService(openAi.Object);
@@ -562,7 +562,7 @@ public sealed class RedisChatsServiceTests : IDisposable
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseStreamingAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
-            .Returns(new FakeStreamingResult());
+            .Returns(StreamOf());
         var service = CreateService(openAi.Object);
 
         // Act
@@ -621,34 +621,23 @@ public sealed class RedisChatsServiceTests : IDisposable
         return response;
     }
 
+    private static Task<AsyncStreamingResult<StreamingResponseUpdate>> StreamOf(params StreamingResponseUpdate[] updates) =>
+        Task.FromResult(AsyncStreamingResult.Create(Mock.Of<PipelineResponse>(), (_, _) => Yielded(updates), CancellationToken.None));
+
+    private static async IAsyncEnumerable<StreamingResponseUpdate> Yielded(StreamingResponseUpdate[] updates)
+    {
+        foreach (var update in updates)
+        {
+            await Task.Yield();
+            yield return update;
+        }
+    }
+
     private RedisChatsService CreateService(ResponsesClient responsesClient)
     {
         var services = new ServiceCollection();
         services.AddHybridCache();
         var hybridCache = services.BuildServiceProvider().GetRequiredService<HybridCache>();
         return new RedisChatsService(responsesClient, _databaseMock.Object, hybridCache, _configuration, _telemetry);
-    }
-
-    private sealed class FakeStreamingResult(params StreamingResponseUpdate[] updates)
-        : AsyncCollectionResult<StreamingResponseUpdate>
-    {
-        private readonly StreamingResponseUpdate[] _updates = updates;
-
-        public override ContinuationToken? GetContinuationToken(ClientResult page) => null;
-
-        public override async IAsyncEnumerable<ClientResult> GetRawPagesAsync()
-        {
-            await Task.Yield();
-            yield return ClientResult.FromValue(new object(), Mock.Of<PipelineResponse>());
-        }
-
-        protected override async IAsyncEnumerable<StreamingResponseUpdate> GetValuesFromPageAsync(ClientResult page)
-        {
-            foreach (var update in _updates)
-            {
-                await Task.Yield();
-                yield return update;
-            }
-        }
     }
 }
