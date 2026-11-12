@@ -622,7 +622,7 @@ public sealed class RedisChatsServiceTests : IDisposable
     }
 
     private static Task<AsyncStreamingResult<StreamingResponseUpdate>> StreamOf(params StreamingResponseUpdate[] updates) =>
-        Task.FromResult(AsyncStreamingResult.Create(Mock.Of<PipelineResponse>(), (_, _) => Yielded(updates), CancellationToken.None));
+        Task.FromResult(AsyncStreamingResult.Create(Mock.Of<PipelineResponse>(r => r.ContentStream == Stream.Null), (_, _) => Yielded(updates), CancellationToken.None));
 
     private static async IAsyncEnumerable<StreamingResponseUpdate> Yielded(StreamingResponseUpdate[] updates)
     {
