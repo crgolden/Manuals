@@ -112,15 +112,19 @@ public sealed class RedisChatsServiceTests : IDisposable
         var newestCreatedAt = Generated.NewUnixSeconds();
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(NewestChatId), CommandFlags.None))
-            .ReturnsAsync([
+            .ReturnsAsync(
+            [
                 new HashEntry(RedisChatsService.TitleField, newestTitle),
-                new HashEntry(RedisChatsService.CreatedAtField, newestCreatedAt)]);
+                new HashEntry(RedisChatsService.CreatedAtField, newestCreatedAt),
+            ]);
 
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(OldestChatId), CommandFlags.None))
-            .ReturnsAsync([
+            .ReturnsAsync(
+            [
                 new HashEntry(RedisChatsService.TitleField, Generated.NewChatTitle()),
-                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds()),
+            ]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);
@@ -176,9 +180,11 @@ public sealed class RedisChatsServiceTests : IDisposable
             .ReturnsAsync(score);
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(TestChatId), CommandFlags.None))
-            .ReturnsAsync([
+            .ReturnsAsync(
+            [
                 new HashEntry(RedisChatsService.TitleField, title),
-                new HashEntry(RedisChatsService.CreatedAtField, createdAt)]);
+                new HashEntry(RedisChatsService.CreatedAtField, createdAt),
+            ]);
 
         // Act
         var result = await _service.GetChatAsync(TestEmail, TestChatId, TestContext.Current.CancellationToken);
@@ -289,9 +295,11 @@ public sealed class RedisChatsServiceTests : IDisposable
             .ReturnsAsync([Generated.NewNonGuidSortedSetMember(), RedisChatsService.ChatMember(NewestChatId)]);
         _databaseMock
             .Setup(d => d.HashGetAllAsync(RedisChatsService.ChatMetaKey(NewestChatId), CommandFlags.None))
-            .ReturnsAsync([
+            .ReturnsAsync(
+            [
                 new HashEntry(RedisChatsService.TitleField, Generated.NewChatTitle()),
-                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds())]);
+                new HashEntry(RedisChatsService.CreatedAtField, Generated.NewUnixSeconds()),
+            ]);
 
         // Act
         var result = await _service.GetChatsAsync(TestEmail, TestContext.Current.CancellationToken);

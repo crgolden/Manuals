@@ -30,7 +30,7 @@ jobs:
         if: github.actor == 'dependabot[bot]'
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.x'
+          dotnet-version: '11.x'
 
       - name: Regenerate lock files and push
         if: github.actor == 'dependabot[bot]'
@@ -103,7 +103,7 @@ jobs:
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.x'
+          dotnet-version: '11.x'
 
       - name: Cache dotnet global tools
         id: cache-dotnet-tools
@@ -160,9 +160,9 @@ jobs:
       - name: Run unit tests with coverage
         run: |
           $arguments = @(
-            'Manuals.Tests.Unit/bin/Release/net10.0'
+            'Manuals.Tests.Unit/bin/Release/net11.0'
             '--target', 'dotnet'
-            '--targetargs', 'test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults'
+            '--targetargs', 'test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net11.0/TestResults'
             '--format', 'opencover', '--output', 'coverage.opencover.xml'
             '--skipautoprops'
             '--exclude-by-attribute', 'GeneratedCodeAttribute'
@@ -192,7 +192,7 @@ jobs:
         run: |
           $arguments = @(
             'collect'
-            'dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults'
+            'dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net11.0/TestResults'
             '-f', 'xml', '-o', 'coverage-integration.xml', '-s', 'coverage.settings.xml'
           )
           dotnet-coverage @arguments
@@ -204,8 +204,8 @@ jobs:
           name: test-results
           if-no-files-found: error
           path: |
-            Manuals.Tests.Unit/bin/Release/net10.0/TestResults/
-            Manuals.Tests.Integration/bin/Release/net10.0/TestResults/
+            Manuals.Tests.Unit/bin/Release/net11.0/TestResults/
+            Manuals.Tests.Integration/bin/Release/net11.0/TestResults/
 
       - name: dotnet publish
         env:
@@ -269,11 +269,17 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_C329C8261C3244ACB850928362690ADC }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B09849552EEF4A26B6234A3254D8CEC1 }}
 
+      - name: Run the app on .NET 11
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+        run: az webapp config set --resource-group $env:AZURE_RESOURCE_GROUP --name $env:AZURE_WEBAPP_NAME --net-framework-version v11.0 --output none
+
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383  # v3.0.8
         with:
-          app-name: 'crgolden-manuals'
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           slot-name: 'Production'
           package: .
 

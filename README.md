@@ -43,14 +43,14 @@ The two hot read paths (a chat's message history and a user's chat list) are wra
 | Persistence | Redis |
 | Auth | JWT Bearer (`manuals` scope) |
 | Observability | OpenTelemetry → Grafana Alloy (OTLP), Serilog → Elasticsearch |
-| Hosting | Azure App Service (Windows, .NET 10, F1 plan) |
+| Hosting | Azure App Service (Windows, .NET 11, F1 plan) |
 | Cloud Identity | `DefaultAzureCredential` (Managed Identity in production) |
 
 ## Prerequisites
 
 | Tool | Notes |
 |---|---|
-| [.NET 10 SDK](https://dotnet.microsoft.com/download) | `global.json` pins `10.0.201` and rolls forward to the latest feature band |
+| [.NET 11 SDK](https://dotnet.microsoft.com/download) | `global.json` pins `11.0.100` and rolls forward to the latest feature band |
 | GitHub personal access token | `read:packages` scope: the `Shared` package restores from the `crgolden` GitHub Packages feed (`NuGet.Config`), which asks for a token even for a public package. Store it as the `GitHub` source's credentials in your user NuGet configuration (`dotnet nuget update source GitHub --username <user> --password <token> --store-password-in-clear-text --configfile "$env:APPDATA\NuGet\NuGet.Config"`), never in this repo |
 | Azure OpenAI resource | Deployed model (e.g. `gpt-5-mini`); accessible via API key in non-production. Not needed for the tests |
 | Redis instance | Any Redis the app can reach; on Windows, Redis in WSL 2 at `localhost:6379` works |
@@ -113,13 +113,13 @@ Manuals.Tests.Integration/  # xUnit v3: integration tests against a real Redis w
 ```powershell
 # Unit tests only (no external dependencies)
 dotnet build Manuals.Tests.Unit --configuration Debug
-.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
+.\Manuals.Tests.Unit\bin\Debug\net11.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
 
 # Integration tests (WSL Redis with a WSL terminal kept open; Azure OpenAI is stubbed, so no OpenAI key and no az login)
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:RedisDatabase = "1"
 dotnet build Manuals.Tests.Integration --configuration Debug
-.\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
+.\Manuals.Tests.Integration\bin\Debug\net11.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
 ```
 
 See [TESTING.md](TESTING.md) for the full testing guide.

@@ -28,8 +28,8 @@ Register-StepInputs @{
 }
 $repo = $PSScriptRoot
 $sarif = (Join-Path $gateOutput 'manuals-inspect.sarif')
-$unitTrx = Join-Path $repo 'Manuals.Tests.Unit\bin\Release\net10.0\TestResults\unit-tests.trx'
-$integrationTrx = Join-Path $repo 'Manuals.Tests.Integration\bin\Release\net10.0\TestResults\integration-tests.trx'
+$unitTrx = Join-Path $repo 'Manuals.Tests.Unit\bin\Release\net11.0\TestResults\unit-tests.trx'
+$integrationTrx = Join-Path $repo 'Manuals.Tests.Integration\bin\Release\net11.0\TestResults\integration-tests.trx'
 $sonarBranch = Get-SonarBranchName
 $beginSonar = "Begin Sonar analysis (branch $sonarBranch)"
 $build = 'Build with dotnet (Release, RestoreLockedMode)'
@@ -158,9 +158,9 @@ if (-not (Test-StepCarried 'jb inspectcode')) {
 if (-not (Test-StepCarried $unitStep)) {
     if (Test-Path $unitTrx) { Remove-Item $unitTrx -Force }
     $global:LASTEXITCODE = $null
-    dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
+    dotnet coverlet Manuals.Tests.Unit\bin\Release\net11.0 `
         --target "dotnet" `
-        --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net10.0/TestResults" `
+        --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename unit-tests.trx --results-directory=Manuals.Tests.Unit/bin/Release/net11.0/TestResults" `
         --format opencover --output "coverage.opencover.xml" `
         --skipautoprops --exclude-by-attribute GeneratedCodeAttribute --exclude-by-file "**/obj/**" `
         --exclude-by-file "**/Program.cs" --does-not-return-attribute DoesNotReturnAttribute --include "[Manuals]*"
@@ -201,7 +201,7 @@ else {
             $env:RedisDatabase ??= '1'
             $global:LASTEXITCODE = $null
             dotnet-coverage collect `
-                "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net10.0/TestResults" `
+                "dotnet test --project Manuals.Tests.Integration --no-build --configuration Release -- --filter-trait Category=Integration --stop-on-fail on --report-xunit-trx --report-xunit-trx-filename integration-tests.trx --results-directory=Manuals.Tests.Integration/bin/Release/net11.0/TestResults" `
                 -f xml -o "coverage-integration.xml" -s "coverage.settings.xml"
             Test-Trx $integrationStep $integrationTrx $global:LASTEXITCODE -floor 1
         }

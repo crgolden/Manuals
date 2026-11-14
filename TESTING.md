@@ -19,7 +19,7 @@ Run every test command from the repo root. The integration tier needs `ASPNETCOR
 
 ```powershell
 dotnet build Manuals.Tests.Unit --configuration Debug
-.\Manuals.Tests.Unit\bin\Debug\net10.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
+.\Manuals.Tests.Unit\bin\Debug\net11.0\Manuals.Tests.Unit.exe -trait "Category=Unit" -showLiveOutput
 ```
 
 ### Integration Tests
@@ -41,10 +41,10 @@ Requires a running Redis instance and nothing else outside the service boundary:
 $env:ASPNETCORE_ENVIRONMENT = "Development"
 $env:RedisDatabase = "1"
 dotnet build Manuals.Tests.Integration --configuration Debug
-.\Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
+.\Manuals.Tests.Integration\bin\Debug\net11.0\Manuals.Tests.Integration.exe -trait "Category=Integration" -showLiveOutput
 
 # Redirect output for in-flight inspection
-cmd /c "Manuals.Tests.Integration\bin\Debug\net10.0\Manuals.Tests.Integration.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
+cmd /c "Manuals.Tests.Integration\bin\Debug\net11.0\Manuals.Tests.Integration.exe -trait ""Category=Integration"" -showLiveOutput > C:\temp\manuals-integration.txt 2>&1"
 ```
 
 ### In the local gate
@@ -109,7 +109,7 @@ dotnet-sonarscanner begin /k:"crgolden_Manuals" /o:"crgolden" /d:sonar.token="$e
 dotnet build --no-incremental --configuration Release
 
 # Unit (OpenCover, carries branch/condition coverage)
-dotnet coverlet Manuals.Tests.Unit\bin\Release\net10.0 `
+dotnet coverlet Manuals.Tests.Unit\bin\Release\net11.0 `
   --target "dotnet" `
   --targetargs "test --project Manuals.Tests.Unit --no-build --configuration Release -- --filter-trait Category=Unit" `
   --format opencover --output "coverage.opencover.xml" `
