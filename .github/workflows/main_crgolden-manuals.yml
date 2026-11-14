@@ -214,7 +214,7 @@ jobs:
           dotnet publish Manuals/Manuals.csproj
           -c Release
           -r win-x86
-          --self-contained false
+          --self-contained true
           -o ${{ github.workspace }}/publish
 
       - name: Upload artifact for deployment job
