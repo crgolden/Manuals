@@ -31,7 +31,7 @@ stored and returned whole or streamed as server-sent events. HybridCache sits in
   user's input (truncated with `…`) only while the stored title is missing or blank.
 - **HybridCache keys live under `manuals:hc:`**, apart from the primary keys, and every write removes the affected
   cache entry, so a read never serves data older than the last write.
-- **The stream action returns `void`**: it writes `data: {"delta":{"content":"..."}}` events and a final
+- **The stream action returns `Task`, not an `IActionResult`**: it writes `data: {"delta":{"content":"..."}}` events and a final
   `data: [DONE]`, with response buffering disabled before the first write; a 400 or 404 there is a bare status.
 - **Prose sent to the model is configuration**: `OpenAIInstructions` and the integration tier's prompts come from
   settings, never from code.

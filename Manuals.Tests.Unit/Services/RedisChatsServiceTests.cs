@@ -41,7 +41,7 @@ public sealed class RedisChatsServiceTests : IDisposable
             })
             .Build();
 
-        _service = CreateService(Mock.Of<ResponsesClient>());
+        _service = CreateService(Mock.Of<ResponsesClient>(MockBehavior.Strict));
     }
 
     public enum OwnershipRequiredOperation
@@ -465,7 +465,7 @@ public sealed class RedisChatsServiceTests : IDisposable
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ClientResult.FromValue(BuildResponse(expectedOutput), Mock.Of<PipelineResponse>()));
+            .ReturnsAsync(ClientResult.FromValue(BuildResponse(expectedOutput), Mock.Of<PipelineResponse>(MockBehavior.Strict)));
         var service = CreateService(openAi.Object);
 
         // Act
@@ -497,7 +497,7 @@ public sealed class RedisChatsServiceTests : IDisposable
         var openAi = new Mock<ResponsesClient>(MockBehavior.Strict);
         openAi
             .Setup(c => c.CreateResponseAsync(It.IsAny<CreateResponseOptions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ClientResult.FromValue(BuildEmptyResponse(), Mock.Of<PipelineResponse>()));
+            .ReturnsAsync(ClientResult.FromValue(BuildEmptyResponse(), Mock.Of<PipelineResponse>(MockBehavior.Strict)));
         var service = CreateService(openAi.Object);
 
         // Act
@@ -629,8 +629,13 @@ public sealed class RedisChatsServiceTests : IDisposable
         return response;
     }
 
-    private static Task<AsyncStreamingResult<StreamingResponseUpdate>> StreamOf(params StreamingResponseUpdate[] updates) =>
-        Task.FromResult(AsyncStreamingResult.Create(Mock.Of<PipelineResponse>(r => r.ContentStream == Stream.Null), (_, _) => Yielded(updates), CancellationToken.None));
+    private static Task<AsyncStreamingResult<StreamingResponseUpdate>> StreamOf(params StreamingResponseUpdate[] updates)
+    {
+        var response = new Mock<PipelineResponse>(MockBehavior.Strict);
+        response.Setup(r => r.ContentStream).Returns(Stream.Null);
+        response.Setup(r => r.Dispose());
+        return Task.FromResult(AsyncStreamingResult.Create(response.Object, (_, _) => Yielded(updates), TestContext.Current.CancellationToken));
+    }
 
     private static async IAsyncEnumerable<StreamingResponseUpdate> Yielded(StreamingResponseUpdate[] updates)
     {

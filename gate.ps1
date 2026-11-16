@@ -185,8 +185,7 @@ else {
             Write-Row $redisStep 'PASS' "a WSL session is open and $redisEndpoint accepts connections"
         }
         elseif ($wslSession -and $wslSession.HasExited) {
-            Write-Row $redisStep 'SKIPPED' "WSL could not be started (wsl.exe exit $($wslSession.ExitCode))"
-            Write-Row $integrationStep 'SKIPPED' 'needs WSL Redis, and WSL could not be started'
+            Stop-Gate $redisStep "WSL could not be started (wsl.exe exit $($wslSession.ExitCode)), and the integration tier needs its Redis"
         }
         elseif ($redisFromEnvironment) {
             Stop-Gate $redisStep "nothing accepted a connection on $redisEndpoint (RedisHost from the environment) within 60 seconds"
