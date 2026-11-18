@@ -12,20 +12,18 @@ $gateOutput = if (Get-Command Get-GateOutputDirectory -ErrorAction SilentlyConti
 } else {
     (New-Item -ItemType Directory -Force -Path (Join-Path ([IO.Path]::GetTempPath()) "claude\crgolden-gates\$(Split-Path -Leaf $PSScriptRoot)")).FullName
 }
-Register-GateSteps @('Begin Sonar analysis', 'Build with dotnet', 'Restore local tools', 'jb inspectcode',
+Register-GateStep @('Begin Sonar analysis', 'Build with dotnet', 'Restore local tools', 'jb inspectcode',
     'Run unit tests with coverage', 'Local Redis (WSL) for the integration tier', 'Run integration tests with coverage', 'End Sonar analysis',
     'Fail on open Sonar issues')
-Register-StepInputs @{
-    'Begin Sonar analysis'                       = @('*')
-    'Build with dotnet'                          = @('*')
-    'Restore local tools'                        = @('dotnet-tools.json')
-    'jb inspectcode'                             = @('*')
-    'Run unit tests with coverage'               = @('*', '!Manuals.Tests.Integration/*')
-    'Local Redis (WSL) for the integration tier' = @('*', '!Manuals.Tests.Unit/*')
-    'Run integration tests with coverage'        = @('*', '!Manuals.Tests.Unit/*')
-    'End Sonar analysis'                         = @('*')
-    'Fail on open Sonar issues'                  = @('*')
-}
+Register-StepInput 'Begin Sonar analysis' @('*')
+Register-StepInput 'Build with dotnet' @('*')
+Register-StepInput 'Restore local tools' @('dotnet-tools.json')
+Register-StepInput 'jb inspectcode' @('*')
+Register-StepInput 'Run unit tests with coverage' @('*', '!Manuals.Tests.Integration/*')
+Register-StepInput 'Local Redis (WSL) for the integration tier' @('*', '!Manuals.Tests.Unit/*')
+Register-StepInput 'Run integration tests with coverage' @('*', '!Manuals.Tests.Unit/*')
+Register-StepInput 'End Sonar analysis' @('*')
+Register-StepInput 'Fail on open Sonar issues' @('*')
 $repo = $PSScriptRoot
 $sarif = (Join-Path $gateOutput 'manuals-inspect.sarif')
 $unitTrx = Join-Path $repo 'Manuals.Tests.Unit\bin\Release\net11.0\TestResults\unit-tests.trx'
@@ -124,8 +122,8 @@ if ($Only) {
 }
 exit (Invoke-Gate {
 Initialize-GateState 'Manuals' $repo
-Resolve-OwedSteps
-Invoke-CatalogSteps
+Get-OwedStep | Register-OwedStep
+Invoke-GateLibraryStep
 
 $sonarCarried = Test-StepCarried $sonarIssues
 if ($sonarCarried) {
@@ -151,7 +149,7 @@ Assert-StepExit 'Restore local tools (dotnet tool restore)'
 
 if (-not (Test-StepCarried 'jb inspectcode')) {
     if (Test-Path $sarif) { Remove-Item $sarif -Force }
-    dotnet jb inspectcode "$repo\Manuals.slnx" --no-build -e=WARNING --caches-home="$(New-InspectCodeCaches $gateOutput)" --output="$sarif"
+    dotnet jb inspectcode "$repo\Manuals.slnx" --no-build -e=WARNING --caches-home="$(New-InspectCodeCache $gateOutput)" --output="$sarif"
     Test-Sarif $sarif
 }
 
@@ -214,7 +212,7 @@ if (-not $sonarCarried) {
     $global:LASTEXITCODE = $null
     dotnet-sonarscanner end
     Assert-StepExit $endSonar
-    Test-SonarIssues $sonarIssues 'crgolden_Manuals' $sonarBranch $sonarStartedAt
+    Assert-NoOpenSonarIssue $sonarIssues 'crgolden_Manuals' $sonarBranch $sonarStartedAt
 }
 
 Write-Row 'Upload test results / dotnet publish / Upload artifact / deploy' 'NOT RUN' 'delivery steps, not checks'
