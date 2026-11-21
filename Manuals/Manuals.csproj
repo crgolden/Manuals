@@ -21,7 +21,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0" />
     <PackageReference Include="Microsoft.OpenApi" Version="3.11.1" />
     <PackageReference Include="Microsoft.Extensions.Azure" Version="1.14.1" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="11.0.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="11.0.0" />
     <PackageReference Include="OpenAI" Version="2.15.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.21.0" />
@@ -34,7 +34,7 @@
     <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Shared" Version="2.0.0" />
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.36.0.15337">
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.37.0.15768">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
