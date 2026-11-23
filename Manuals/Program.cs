@@ -11,6 +11,7 @@ using Elastic.Transport;
 using Manuals;
 using Manuals.Extensions;
 using Manuals.HealthChecks;
+using Manuals.Logging;
 using Manuals.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -178,6 +179,7 @@ try
     app.UseForwardedHeaders();
     app.UseSerilogRequestLogging(options =>
     {
+        options.GetLevel = RequestLogLevel.Of;
         options.EnrichDiagnosticContext = (diagnosticContext, _) =>
         {
             if (Activity.Current is null)
