@@ -133,7 +133,7 @@ jobs:
             '/d:sonar.cs.opencover.reportsPaths=coverage.opencover.xml'
             '/d:sonar.cs.vscoveragexml.reportsPaths=coverage-integration.xml'
             '/d:sonar.exclusions=**/bin/**,**/obj/**'
-            '/d:sonar.coverage.exclusions=**/Program.cs,**/gate.ps1'
+            '/d:sonar.coverage.exclusions=**/Program.cs,**/gate.ps1,**/gate.steps.psd1,scripts/gate/**'
             '/d:sonar.qualitygate.wait=true'
             '/d:sonar.scanner.skipJreProvisioning=true'
             '/d:sonar.scm.use.blame.algorithm=GIT_NATIVE_BLAME'

@@ -19,7 +19,7 @@ stored and returned whole or streamed as server-sent events. HybridCache sits in
 | `Manuals.Tests.Unit`, `Manuals.Tests.Integration` | the two test tiers ([TESTING.md](TESTING.md)) |
 | `.github/workflows/main_crgolden-manuals.yml` | build, inspect, test, analyze and deploy |
 | `NuGet.Config`, `packages.lock.json` files, `dotnet-tools.json`, `global.json`, `coverage.settings.xml` | package sources (the `Shared` package from GitHub Packages), locked restore, pinned tools, the SDK, integration coverage settings |
-| `gate.ps1` | the maintainers' local gate (README.md, "Gate") |
+| `gate.ps1`, `gate.steps.psd1`, `scripts/gate/` | the maintainers' local gate: its entry point, its step list and the script that holds Redis open around the integration tier (README.md, "Gate") |
 
 ## Invariants
 
