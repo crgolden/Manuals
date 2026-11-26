@@ -25,9 +25,9 @@
       },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
-        "requested": "[10.36.0.15337, )",
-        "resolved": "10.36.0.15337",
-        "contentHash": "jGLAZUjheSURfe0T/dJYGUrMOrLt1fxaInpChq75YJvrywsxFoUKK/EM6PSfTjkt4pbaq2ywIQjgQzhrmmj5Ow=="
+        "requested": "[10.37.0.15768, )",
+        "resolved": "10.37.0.15768",
+        "contentHash": "73Qo5UF1HSCwUGqiZ9XOKXWNRAe3WN8dfsj3pWIi5oIuenY1Uo9WuMinGibs3up9zcJ5CFk5Ex/Ei/S17mcBvg=="
       },
       "StyleCop.Analyzers": {
         "type": "Direct",
@@ -263,8 +263,8 @@
       },
       "Microsoft.Extensions.Caching.Hybrid": {
         "type": "Transitive",
-        "resolved": "11.0.0",
-        "contentHash": "SB0COfE5ZlYNouaQicXTFp4rcLNkNjTcstFdUvqEVERYIh5amqXuDsl7yblotT5Am9XXlAjmLKP9SLBz0VYJAA==",
+        "resolved": "11.0.1",
+        "contentHash": "U1I093qKyPJpYTJ7ifgEarejzWFLNIwjeBev5ccsAhYqutLceKDeLhaLi6PgaThxV+Uoca6PaFrGCj0+ZLGxMQ==",
         "dependencies": {
           "Microsoft.Extensions.Caching.Memory": "11.0.0"
         }
@@ -891,7 +891,7 @@
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[11.0.0, )",
           "Microsoft.AspNetCore.OpenApi": "[11.0.0, )",
           "Microsoft.Extensions.Azure": "[1.14.1, )",
-          "Microsoft.Extensions.Caching.Hybrid": "[11.0.0, )",
+          "Microsoft.Extensions.Caching.Hybrid": "[11.0.1, )",
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[11.0.0, )",
           "Microsoft.OpenApi": "[3.11.1, )",
           "OpenAI": "[2.15.0, )",
