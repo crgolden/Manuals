@@ -32,7 +32,7 @@
             Inputs = @('*')
             Run    = @('dotnet', 'build', '--no-incremental', '--configuration', 'Release', '/p:RestoreLockedMode=true', '-warnaserror')
         }
-        @{ Name = 'Restore local tools'; Run = @('dotnet', 'tool', 'restore'); Inputs = @('dotnet-tools.json') }
+        @{ Name = 'Restore local tools'; Run = @('dotnet', 'tool', 'restore'); Inputs = @('dotnet-tools.json'); Always = $true }
         @{
             Name   = 'ReSharper inspection (jb inspectcode)'
             Needs  = @('Build with dotnet', 'Restore local tools')
